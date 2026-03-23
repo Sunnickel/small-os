@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 fn main() {
     let bios_path = env!("BIOS_PATH");
 
@@ -14,6 +16,12 @@ fn main() {
     });
 
     let status = child.wait().unwrap();
+
+
+    let stable_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bios.img");
+    std::fs::copy(&bios_path, &stable_path).unwrap();
+    println!("cargo:rerun-if-changed=build.rs");
+
 
     match status.code() {
         Some(33) => {
