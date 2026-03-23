@@ -1,0 +1,27 @@
+[package]
+name = "os"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+resolver = "3"
+members = ["kernel"]
+
+[profile.dev]
+opt-level = "z"
+codegen-units = 1
+panic = "abort"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dependencies]
+bootloader = { version = "0.11", features = ["bios"] }
+
+[build-dependencies]
+kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
+bootloader = { version = "0.11", features = ["bios"] }
