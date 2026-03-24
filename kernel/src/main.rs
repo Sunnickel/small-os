@@ -1,77 +1,47 @@
 #![no_std]
 #![no_main]
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_runner)]
-#![reexport_test_harness_main = "test_main"]
 
-pub mod frame_buffer;
-pub mod port;
-pub mod qemu;
-mod macros;
-
-use crate::macros::_print;
-use crate::frame_buffer::Writer;
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::config::Mapping;
+use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 use core::panic::PanicInfo;
+use kernel::serial_println;
 
-entry_point!(kernel_main);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum QemuExitCode {
+    Success = 0x10,
+    Failed = 0x11,
+}
+
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config
+};
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    init(boot_info);
-    loop {}
+    kernel::init(boot_info);
+    serial_println!("Starting up...");
+    kernel::hlt_loop()
 }
 
-fn init(boot_info: &'static mut BootInfo) {
-    let framebuffer = boot_info.framebuffer.as_mut().unwrap();
-    let info = framebuffer.info();
-    let buffer = framebuffer.buffer_mut();
-
-    Writer::init(buffer, info);
-
-    println!("Hello OS!");
-    println!("Hello OS!");
-    println!("Hello OS!");
-    println!("Hello OS!");
-    println!("Hello OS!");
-    println!("Hello OS!");
-
-    #[cfg(test)]
-    run_tests();
-}
-
-#[cfg(test)]
-fn run_tests() {
-    test_main();
-    use crate::qemu::{exit_qemu, QemuExitCode};
-    exit_qemu(QemuExitCode::Success);
-}
-
-#[cfg(not(test))]
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+fn panic(info: &PanicInfo) -> ! {
+    serial_println!("[os panic] {}", info);
+    exit_qemu(QemuExitCode::Failed);
 }
 
-#[cfg(test)]
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    use crate::qemu::{exit_qemu, QemuExitCode};
-    exit_qemu(QemuExitCode::Failure)
-}
+pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
+    use x86_64::instructions::{nop, port::Port};
 
-#[cfg(test)]
-pub fn test_runner(tests: &[&dyn Fn()]) {
-    for test in tests {
-        test();
+    unsafe {
+        let mut port = Port::new(0xf4);
+        port.write(exit_code as u32);
     }
-    use crate::qemu::{exit_qemu, QemuExitCode};
-    exit_qemu(QemuExitCode::Success);
+
+    loop {
+        nop();
+    }
 }
 
-
-#[test_case]
-fn trivial_assertion() {
-    print!("trivial assertion... ");
-    assert_eq!(1, 1);
-    println!("[ok]");
-}
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
