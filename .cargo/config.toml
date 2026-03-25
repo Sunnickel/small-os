@@ -1,2 +1,11 @@
 [unstable]
 bindeps = true
+
+[target.x86_64-unknown-none]
+rustflags = [
+    "-C", "link-arg=-Tkernel.ld",
+    "-C", "link-arg=--undefined=__start_commands",
+]
+
+[env]
+CC = "clang"

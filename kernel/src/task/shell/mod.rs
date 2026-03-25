@@ -1,15 +1,17 @@
 mod scancodes;
 pub mod commands;
 
-use crate::screen::SCREEN_WRITER;
 use crate::task::sleep::Sleep;
 use crate::{print, println};
-use core::fmt::Write;
 use futures_util::stream::StreamExt;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use crate::task::shell::scancodes::ScancodeStream;
 
 pub async fn shell_task() {
+    unsafe {
+        commands::init_commands();
+    }
+
     let mut stream = ScancodeStream::new();
     let mut line_buffer = heapless::String::<128>::new();
 
@@ -53,15 +55,22 @@ pub async fn shell_task() {
 }
 
 async fn execute_command(line: &str) {
-    match line {
-        "help" => println!("Commands: help, echo, sleep"),
-        s if s.starts_with("echo ") => println!("{}", &s[5..]),
-        s if s.starts_with("sleep ") => {
-            if let Ok(ticks) = s[6..].parse::<usize>() {
-                Sleep::new(ticks).await;
-            }
-        }
-        _ => println!("Unknown command"),
+    let mut parts = line.split_whitespace();
+    let name = match parts.next() {
+        Some(n) => n,
+        None => return,
+    };
+
+    let args: heapless::Vec<&str, 16> = parts.collect();
+
+    let func = {
+        let map = commands::COMMANDS.lock();
+        map.get(name).map(|e| e.func)
+    };
+
+    match func {
+        Some(f) => f(args.as_slice()).await,
+        None => println!("Unknown command: {}", name),
     }
 }
 

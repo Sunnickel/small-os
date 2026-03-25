@@ -9,8 +9,8 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_name = &input_fn.sig.ident;
 
     let wrapper_name = format_ident!("{}_wrapper", fn_name);
-    let static_name = format_ident!("{}_CMD_ENTRY", fn_name);
-
+    let static_name = format_ident!("{}_CMD_ENTRY", fn_name.to_string().to_uppercase());
+    
     let expanded = quote! {
         #input_fn
 
@@ -21,7 +21,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[used]
-        #[link_section = ".commands"]
+        #[unsafe(link_section = ".commands")]   // <-- this line changed
         static #static_name: crate::task::shell::commands::CommandEntry =
             crate::task::shell::commands::CommandEntry {
                 name: #name,
