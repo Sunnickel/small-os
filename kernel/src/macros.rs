@@ -1,26 +1,21 @@
+use crate::INTERRUPT_LOG_BUFFER;
 use core::fmt;
 use core::fmt::Write;
-use core::sync::atomic::AtomicUsize;
 use heapless::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
-use uart_16550::{Config, Uart16550};
 use uart_16550::backend::PioBackend;
-
-// For counting ticks/events (Option 3)
-pub static TIMER_TICKS: AtomicUsize = AtomicUsize::new(0);
-pub static KEYBOARD_EVENTS: AtomicUsize = AtomicUsize::new(0);
-
-// For buffering output from interrupts (Option 2)
-pub static INTERRUPT_BUFFER: Mutex<String<1024>> = Mutex::new(String::new());
+use uart_16550::{Config, Uart16550};
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<Uart16550<PioBackend>> = {
         let mut uart = unsafe { Uart16550::new_port(0x3F8).expect("should be valid port") };
-        uart.init(Config::default()).expect("should init device successfully");
-        uart.test_loopback().expect("should have working loopback mode");
-        uart.check_connected().expect("should have physically connected receiver");
-
+        uart.init(Config::default())
+            .expect("should init device successfully");
+        uart.test_loopback()
+            .expect("should have working loopback mode");
+        uart.check_connected()
+            .expect("should have physically connected receiver");
 
         Mutex::new(uart)
     };
@@ -63,7 +58,7 @@ pub fn _print(args: fmt::Arguments) {
     }
 
     interrupts::without_interrupts(|| {
-        if let Some(mut writer) = crate::screen::WRITER.try_lock() {
+        if let Some(mut writer) = crate::screen::SCREEN_WRITER.try_lock() {
             if let Some(w) = writer.as_mut() {
                 let _ = w.write_fmt(args);
             }
@@ -73,8 +68,8 @@ pub fn _print(args: fmt::Arguments) {
 
 #[doc(hidden)]
 pub fn _print_serial(args: core::fmt::Arguments) {
-    use x86_64::instructions::interrupts;
     use core::fmt::Write;
+    use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
         let mut buf: String<256> = String::new();
@@ -85,17 +80,8 @@ pub fn _print_serial(args: core::fmt::Arguments) {
 }
 
 pub fn buffer_from_interrupt(args: fmt::Arguments) {
-    let mut buf = INTERRUPT_BUFFER.lock();
+    let mut buf = INTERRUPT_LOG_BUFFER.lock();
     let _ = buf.write_fmt(args);
-}
-
-pub fn flush_interrupt_buffer() {
-    let mut buf = INTERRUPT_BUFFER.lock();
-
-    if !buf.is_empty() {
-        crate::_print_raw(buf.as_str());
-        buf.clear();
-    }
 }
 
 #[doc(hidden)]
@@ -104,7 +90,7 @@ pub fn _print_raw(s: &str) {
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
-        if let Some(writer) = crate::screen::WRITER.lock().as_mut() {
+        if let Some(writer) = crate::screen::SCREEN_WRITER.lock().as_mut() {
             let _ = writer.write_str(s);
         }
     });

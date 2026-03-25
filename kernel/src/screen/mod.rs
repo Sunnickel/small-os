@@ -1,9 +1,7 @@
 use core::fmt;
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use font8x8::UnicodeFonts;
-use spinning_top::Spinlock;
-
-pub static WRITER: Spinlock<Option<Writer>> = Spinlock::new(None);
+pub(crate) use crate::flags::SCREEN_WRITER;
 
 pub struct Writer {
     pub framebuffer: &'static mut [u8],
@@ -17,7 +15,7 @@ impl Writer {
     pub fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
         let mut writer = Writer::new(buffer, info);
         writer.clear(0, 0, 0);
-        *WRITER.lock() = Some(writer);
+        *SCREEN_WRITER.lock() = Some(writer);
     }
 
     pub fn new(framebuffer: &'static mut [u8], info: FrameBufferInfo) -> Self {

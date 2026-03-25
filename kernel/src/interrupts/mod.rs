@@ -2,17 +2,13 @@ pub mod gdt;
 pub mod hardware_interrupt;
 pub mod interrupt_index;
 
-use core::sync::atomic::Ordering;
-use heapless::Vec;
 use crate::interrupts::hardware_interrupt::PICS;
 use crate::interrupts::interrupt_index::InterruptIndex;
-use crate::{hlt_loop, println, serial_println, TIMER_TICKS};
+use crate::{println, serial_println, TIMER_TICKS};
+use core::sync::atomic::Ordering;
 use lazy_static::lazy_static;
-use spin::Mutex;
-use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
-
-static KEYBOARD_BUFFER: Mutex<Vec<u8, 64>> = Mutex::new(Vec::new());
+use crate::flags::{KEYBOARD_EVENT_COUNT, KEYBOARD_WAKER, SCANCODE_QUEUE, SHOULD_YIELD_FLAG, TIMER_WAKER};
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -45,7 +41,6 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("Accessed Address: {:?}", Cr2::read());
     serial_println!("Error Code: {:?}", error_code);
     serial_println!("{:#?}", stack_frame);
-    hlt_loop();
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
@@ -67,10 +62,11 @@ extern "x86-interrupt" fn double_fault_handler(
     }
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(
-    _stack_frame: InterruptStackFrame)
-{
+extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TIMER_TICKS.fetch_add(1, Ordering::Relaxed);
+    SHOULD_YIELD_FLAG.store(true, Ordering::Relaxed);
+
+    TIMER_WAKER.wake();
     unsafe {
         if let Some(mut pics) = PICS.try_lock() {
             pics.notify_end_of_interrupt(InterruptIndex::Timer.as_irq());
@@ -79,21 +75,23 @@ extern "x86-interrupt" fn timer_interrupt_handler(
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(
-    _stack_frame: InterruptStackFrame)
-{
+    _stack_frame: InterruptStackFrame
+) {
+    use x86_64::instructions::port::Port;
+
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    if let Some(mut buf) = KEYBOARD_BUFFER.try_lock() {
-        let _ = buf.push(scancode);
+    if let Some(queue) = SCANCODE_QUEUE.get() {
+        queue.push(scancode).ok();
     }
+
+    KEYBOARD_EVENT_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    KEYBOARD_WAKER.wake();
 
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_irq());
     }
-}
-
-pub fn get_key() -> Option<u8> {
-    KEYBOARD_BUFFER.lock().pop()
 }

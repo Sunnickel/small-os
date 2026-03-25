@@ -1,10 +1,13 @@
 #![no_std]
 #![no_main]
+extern crate alloc;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
-use core::panic::PanicInfo;
-use kernel::serial_println;
+use kernel::task::executor::{Executor};
+use kernel::task::{Task};
+use kernel::{serial_println};
+use kernel::task::shell::shell_task;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -22,13 +25,10 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     kernel::init(boot_info);
     serial_println!("Starting up...");
-    kernel::hlt_loop()
-}
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    serial_println!("[os panic] {}", info);
-    exit_qemu(QemuExitCode::Failed);
+    let mut executor = Executor::new();
+    executor.spawn(Task::new(shell_task()));
+    executor.run();
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) -> ! {

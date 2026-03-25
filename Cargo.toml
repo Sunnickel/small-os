@@ -1,11 +1,11 @@
-[workspace]
-resolver = "3"
-members = ["kernel"]
-
 [package]
 name = "os"
 version = "0.1.0"
 edition = "2024"
+
+[workspace]
+resolver = "3"
+members = ["kernel", "macros"]
 
 [profile.dev]
 opt-level = "z"

@@ -3,7 +3,12 @@ name = "kernel"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+
 [dependencies]
+kernel_commands_macro = { path = "../macros" }
+
 bootloader_api = { version = "0.11" }
 font8x8 = { version = "0.3.1", default-features = false, features = ["unicode"] }
 spinning_top = { version = "0.3.0", default-features = false }
@@ -14,3 +19,7 @@ spin = "0.10.0"
 uart_16550 = "0.5.0"
 heapless = "0.9.2"
 pc-keyboard = { version = "0.8.0", default-features = false }
+linked_list_allocator = "0.10.5"
+crossbeam-queue = { version = "0.3.12", default-features = false, features = ["alloc"] }
+conquer-once = {version =  "0.4.0", default-features = false }
+futures-util = {version = "0.3.32", default-features = false, features = ["alloc"]}
