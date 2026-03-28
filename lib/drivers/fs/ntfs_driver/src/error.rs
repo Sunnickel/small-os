@@ -1,70 +1,49 @@
-#![no_std]
-#![feature(error_in_core)]
-
-extern crate alloc;
-
-use alloc::string::{String, ToString};
 use core::fmt;
-pub use driver_core::block_device::BlockError;
 
-pub use super::NtfsError;
+use hal::{fs::FsError, io::IoError};
 
-// Unified error type for filesystem operations
-#[derive(Debug)]
-pub enum FsError {
-    Ntfs(NtfsError),
-    Block(BlockError),
-    NotFound,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NtfsError {
+    InvalidBootSector,
+    InvalidMftRecord,
+    InvalidAttribute,
+    FileNotFound,
     InvalidPath,
-    NotADirectory,
     IoError,
+    NotADirectory,
+    NotAFile,
     CorruptedFilesystem,
-    NoDevice,
-    DriverInit
+}
+
+impl fmt::Display for NtfsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidBootSector => write!(f, "invalid boot sector"),
+            Self::InvalidMftRecord => write!(f, "invalid MFT record"),
+            Self::InvalidAttribute => write!(f, "invalid attribute"),
+            Self::FileNotFound => write!(f, "file not found"),
+            Self::InvalidPath => write!(f, "invalid path"),
+            Self::IoError => write!(f, "I/O error"),
+            Self::NotADirectory => write!(f, "not a directory"),
+            Self::NotAFile => write!(f, "not a file"),
+            Self::CorruptedFilesystem => write!(f, "corrupted filesystem"),
+        }
+    }
 }
 
 impl From<NtfsError> for FsError {
     fn from(e: NtfsError) -> Self {
-        FsError::Ntfs(e)
-    }
-}
-
-impl From<BlockError> for FsError {
-    fn from(e: BlockError) -> Self {
-        FsError::Block(e)
-    }
-}
-
-impl Into<String> for FsError {
-    fn into(self) -> String {
-        match self {
-            FsError::Ntfs(ref e) => e.to_string(),
-            FsError::Block(ref e) => e.to_string(),
-            FsError::NotFound => "not found".to_string(),
-            FsError::InvalidPath => "invalid path".to_string(),
-            FsError::NotADirectory => "not a directory".to_string(),
-            FsError::IoError => "I/O error".to_string(),
-            FsError::CorruptedFilesystem => "corrupted filesystem".to_string(),
-            FsError::NoDevice => "no device".to_string(),
-            FsError::DriverInit => "driver init".to_string(),
+        match e {
+            NtfsError::FileNotFound => FsError::NotFound,
+            NtfsError::NotADirectory => FsError::NotADirectory,
+            NtfsError::NotAFile => FsError::NotAFile,
+            NtfsError::InvalidPath => FsError::InvalidPath,
+            NtfsError::CorruptedFilesystem => FsError::Corrupted,
+            _ => FsError::Other,
         }
     }
 }
 
-impl fmt::Display for FsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FsError::Ntfs(e) => write!(f, "NTFS error: {:?}", e),
-            FsError::Block(e) => write!(f, "Block error: {}", e),
-            FsError::NotFound => write!(f, "file not found"),
-            FsError::InvalidPath => write!(f, "invalid path"),
-            FsError::NotADirectory => write!(f, "not a directory"),
-            FsError::IoError => write!(f, "I/O error"),
-            FsError::CorruptedFilesystem => write!(f, "corrupted filesystem"),
-            FsError::NoDevice => write!(f, "no device"),
-            FsError::DriverInit => write!(f, "driver init"),
-        }
-    }
+impl From<NtfsError> for IoError {
+    fn from(_: NtfsError) -> Self { IoError::Other }
 }
-
-impl core::error::Error for FsError {}

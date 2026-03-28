@@ -9,5 +9,5 @@ pub mod pci {
 }
 
 pub mod dma {
-    pub use driver_core::dma_allocator::*;
+    pub use hal::dma::DmaAllocator;
 }

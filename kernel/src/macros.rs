@@ -1,21 +1,18 @@
-use crate::INTERRUPT_LOG_BUFFER;
-use core::fmt;
-use core::fmt::Write;
+use core::{fmt, fmt::Write};
+
 use heapless::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
-use uart_16550::backend::PioBackend;
-use uart_16550::{Config, Uart16550};
+use uart_16550::{Config, Uart16550, backend::PioBackend};
+
+use crate::INTERRUPT_LOG_BUFFER;
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<Uart16550<PioBackend>> = {
         let mut uart = unsafe { Uart16550::new_port(0x3F8).expect("should be valid port") };
-        uart.init(Config::default())
-            .expect("should init device successfully");
-        uart.test_loopback()
-            .expect("should have working loopback mode");
-        uart.check_connected()
-            .expect("should have physically connected receiver");
+        uart.init(Config::default()).expect("should init device successfully");
+        uart.test_loopback().expect("should have working loopback mode");
+        uart.check_connected().expect("should have physically connected receiver");
 
         Mutex::new(uart)
     };
@@ -50,6 +47,7 @@ macro_rules! serial_println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
+
     use x86_64::instructions::interrupts;
 
     if !interrupts::are_enabled() {
@@ -69,6 +67,7 @@ pub fn _print(args: fmt::Arguments) {
 #[doc(hidden)]
 pub fn _print_serial(args: core::fmt::Arguments) {
     use core::fmt::Write;
+
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
@@ -87,6 +86,7 @@ pub fn buffer_from_interrupt(args: fmt::Arguments) {
 #[doc(hidden)]
 pub fn _print_raw(s: &str) {
     use core::fmt::Write;
+
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {

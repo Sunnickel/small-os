@@ -1,7 +1,6 @@
 pub mod parser;
 
-use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 
 pub enum Token<'a> {
     Word(&'a str),
@@ -32,9 +31,7 @@ pub fn tokenize(input: &'_ str) -> heapless::Vec<Token<'_>, 64> {
                     chars.next();
                 }
                 chars.next();
-                tokens
-                    .push(Token::Word(Box::leak(start.into_boxed_str())))
-                    .ok();
+                tokens.push(Token::Word(Box::leak(start.into_boxed_str()))).ok();
             }
             _ => {
                 let mut word = String::new();
@@ -45,9 +42,7 @@ pub fn tokenize(input: &'_ str) -> heapless::Vec<Token<'_>, 64> {
                     word.push(c2);
                     chars.next();
                 }
-                tokens
-                    .push(Token::Word(Box::leak(word.into_boxed_str())))
-                    .ok();
+                tokens.push(Token::Word(Box::leak(word.into_boxed_str()))).ok();
             }
         }
     }

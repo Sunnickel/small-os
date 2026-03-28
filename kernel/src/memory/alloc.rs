@@ -1,9 +1,14 @@
-use crate::flags::GLOBAL_ALLOCATOR;
-use crate::memory::bump::BumpAllocator;
-use core::alloc::{GlobalAlloc, Layout};
-use core::ptr;
-use x86_64::VirtAddr;
-use x86_64::structures::paging::{FrameAllocator, Size4KiB};
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    ptr,
+};
+
+use x86_64::{
+    VirtAddr,
+    structures::paging::{FrameAllocator, Size4KiB},
+};
+
+use crate::{flags::GLOBAL_ALLOCATOR, memory::bump::BumpAllocator};
 
 /// The heap memory range.
 pub const HEAP_START: usize = 0x_4444_4444_0000;
@@ -11,9 +16,7 @@ pub const HEAP_SIZE: usize = 100 * 1024;
 
 /// Align the given address upwards to the given alignment.
 /// `align` must be a power of two.
-fn align_up(addr: usize, align: usize) -> usize {
-    (addr + align - 1) & !(align - 1)
-}
+fn align_up(addr: usize, align: usize) -> usize { (addr + align - 1) & !(align - 1) }
 
 unsafe impl GlobalAlloc for Locked<BumpAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -44,25 +47,21 @@ unsafe impl GlobalAlloc for Locked<BumpAllocator> {
     }
 }
 
-/// A spinlock wrapper so we can safely mutate the allocator from multiple contexts.
+/// A spinlock wrapper so we can safely mutate the allocator from multiple
+/// contexts.
 pub struct Locked<A> {
     inner: spin::Mutex<A>,
 }
 
 impl<A> Locked<A> {
-    pub const fn new(inner: A) -> Self {
-        Locked {
-            inner: spin::Mutex::new(inner),
-        }
-    }
+    pub const fn new(inner: A) -> Self { Locked { inner: spin::Mutex::new(inner) } }
 
-    pub fn lock(&'_ self) -> spin::MutexGuard<'_, A> {
-        self.inner.lock()
-    }
+    pub fn lock(&'_ self) -> spin::MutexGuard<'_, A> { self.inner.lock() }
 }
 
 /// Maps the heap pages and initializes the allocator.
-/// Call this once during kernel init after the frame allocator and mapper are ready.
+/// Call this once during kernel init after the frame allocator and mapper are
+/// ready.
 pub fn init_heap(
     mapper: &mut impl x86_64::structures::paging::Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,

@@ -3,9 +3,12 @@ pub mod shell;
 pub mod sleep;
 
 use alloc::boxed::Box;
-use core::sync::atomic::{AtomicU64, Ordering};
-use core::task::{Context, Poll};
-use core::{future::Future, pin::Pin};
+use core::{
+    future::Future,
+    pin::Pin,
+    sync::atomic::{AtomicU64, Ordering},
+    task::{Context, Poll},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct TaskId(u64);
@@ -24,13 +27,8 @@ pub struct Task {
 
 impl Task {
     pub fn new(future: impl Future<Output = ()> + 'static) -> Task {
-        Task {
-            id: TaskId::new(),
-            future: Box::pin(future),
-        }
+        Task { id: TaskId::new(), future: Box::pin(future) }
     }
 
-    fn poll(&mut self, context: &mut Context) -> Poll<()> {
-        self.future.as_mut().poll(context)
-    }
+    fn poll(&mut self, context: &mut Context) -> Poll<()> { self.future.as_mut().poll(context) }
 }

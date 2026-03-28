@@ -1,7 +1,10 @@
+use core::{
+    pin::Pin,
+    sync::atomic::Ordering,
+    task::{Context, Poll},
+};
+
 use crate::flags::{TIMER_TICKS, TIMER_WAKER};
-use core::pin::Pin;
-use core::sync::atomic::Ordering;
-use core::task::{Context, Poll};
 
 pub struct Sleep {
     target: usize,
@@ -10,9 +13,7 @@ pub struct Sleep {
 impl Sleep {
     pub fn new(ticks: usize) -> Self {
         let now = TIMER_TICKS.load(Ordering::Relaxed);
-        Sleep {
-            target: now + ticks,
-        }
+        Sleep { target: now + ticks }
     }
 }
 

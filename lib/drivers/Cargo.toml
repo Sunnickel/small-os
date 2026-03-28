@@ -1,9 +1,16 @@
 [package]
 name = "driver"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+test = false
 
 [dependencies]
-driver_block = {path = "block"}
-driver_core = {path = "core"}
-driver_fs = {path = "fs"}
+driver_block = { path = "block" }
+driver_core = { path = "core" }
+driver_fs = { path = "fs" }
+hal = { path = "../hal" }

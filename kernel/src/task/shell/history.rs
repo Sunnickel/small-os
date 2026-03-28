@@ -4,12 +4,7 @@ pub struct History {
 }
 
 impl History {
-    pub fn new() -> Self {
-        Self {
-            entries: heapless::Vec::new(),
-            index: 0,
-        }
-    }
+    pub fn new() -> Self { Self { entries: heapless::Vec::new(), index: 0 } }
 
     pub fn push(&mut self, line: &str) {
         if let Ok(s) = heapless::String::try_from(line) {

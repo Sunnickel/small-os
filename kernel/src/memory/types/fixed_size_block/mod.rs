@@ -1,7 +1,11 @@
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    mem,
+    ptr,
+    ptr::NonNull,
+};
+
 use crate::memory::alloc::Locked;
-use core::alloc::{GlobalAlloc, Layout};
-use core::ptr::NonNull;
-use core::{mem, ptr};
 
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048];
 
@@ -35,8 +39,7 @@ impl FixedSizeBlockAllocator {
     /// called only once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         unsafe {
-            self.fallback_allocator
-                .init(heap_start as *mut u8, heap_size);
+            self.fallback_allocator.init(heap_start as *mut u8, heap_size);
         }
     }
 
@@ -72,9 +75,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         let mut allocator = self.lock();
         match list_index(&layout) {
             Some(index) => {
-                let new_node = ListNode {
-                    next: allocator.list_heads[index].take(),
-                };
+                let new_node = ListNode { next: allocator.list_heads[index].take() };
                 assert!(mem::size_of::<ListNode>() <= BLOCK_SIZES[index]);
                 assert!(mem::align_of::<ListNode>() <= BLOCK_SIZES[index]);
                 let new_node_ptr = ptr as *mut ListNode;

@@ -12,14 +12,18 @@ pub mod memory;
 pub mod screen;
 pub mod task;
 
-use crate::interrupts::gdt;
-use crate::interrupts::hardware_interrupt::{enable_interrupts, PICS};
-use crate::memory::dma_alloc::KernelDmaAllocator;
-use crate::memory::BootInfoFrameAllocator;
 use bootloader_api::BootInfo;
 use flags::*;
 pub use macros::{_print, _print_raw, _print_serial};
 use x86_64::VirtAddr;
+
+use crate::{
+    interrupts::{
+        gdt,
+        hardware_interrupt::{PICS, enable_interrupts},
+    },
+    memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
+};
 
 pub fn init(boot_info: &'static mut BootInfo) {
     // ── Screen ────────────────────────────────────────────────────────────────
@@ -59,7 +63,8 @@ pub fn init(boot_info: &'static mut BootInfo) {
         .expect("heap initialization failed");
     serial_println!("7. Heap allocator initialized");
 
-    // ── File System ────────────────────────────────────────────────────────────────
+    // ── File System
+    // ────────────────────────────────────────────────────────────────
     serial_println!("8. Scanning PCI bus...");
 
     driver::pci::assign_bar64(0, 4, 0, 0x20, 0x8200_0000u64);

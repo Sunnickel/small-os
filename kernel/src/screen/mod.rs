@@ -1,7 +1,9 @@
-pub(crate) use crate::flags::SCREEN_WRITER;
-use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use core::fmt;
+
+use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use font8x8::UnicodeFonts;
+
+pub(crate) use crate::flags::SCREEN_WRITER;
 
 pub struct Writer {
     pub framebuffer: &'static mut [u8],
@@ -18,12 +20,7 @@ impl Writer {
     }
 
     pub fn new(framebuffer: &'static mut [u8], info: FrameBufferInfo) -> Self {
-        Writer {
-            framebuffer,
-            info,
-            x: 0,
-            y: 0,
-        }
+        Writer { framebuffer, info, x: 0, y: 0 }
     }
 
     pub fn write_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
@@ -54,9 +51,7 @@ impl Writer {
     }
 
     pub fn write_char(&mut self, x: usize, y: usize, c: char, r: u8, g: u8, b: u8) {
-        let bitmap = font8x8::BASIC_FONTS
-            .get(c)
-            .unwrap_or(font8x8::BASIC_FONTS.get(' ').unwrap());
+        let bitmap = font8x8::BASIC_FONTS.get(c).unwrap_or(font8x8::BASIC_FONTS.get(' ').unwrap());
 
         for (row, byte) in bitmap.iter().enumerate() {
             for col in 0..8 {

@@ -1,8 +1,12 @@
-use crate::memory::alloc::Locked;
-use crate::memory::types::linked_list::ListNode;
-use core::alloc::{GlobalAlloc, Layout};
-use core::{mem, ptr};
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    mem,
+    ptr,
+};
+
 use x86_64::align_up;
+
+use crate::memory::{alloc::Locked, types::linked_list::ListNode};
 
 unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -38,11 +42,7 @@ pub struct LinkedListAllocator {
 
 impl LinkedListAllocator {
     /// Creates an empty LinkedListAllocator.
-    pub const fn new() -> Self {
-        Self {
-            head: ListNode::new(0),
-        }
-    }
+    pub const fn new() -> Self { Self { head: ListNode::new(0) } }
 
     /// Adjust the given layout so that the resulting allocated memory
     /// region is also capable of storing a `ListNode`.
@@ -89,7 +89,8 @@ impl LinkedListAllocator {
     /// Looks for a free region with the given size and alignment and removes
     /// it from the list.
     ///
-    /// Returns a tuple of the list node and the start address of the allocation.
+    /// Returns a tuple of the list node and the start address of the
+    /// allocation.
     pub(crate) fn find_region(
         &mut self,
         size: usize,

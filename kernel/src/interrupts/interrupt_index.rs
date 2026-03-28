@@ -8,7 +8,5 @@ pub enum InterruptIndex {
 }
 
 impl InterruptIndex {
-    pub fn as_irq(self) -> u8 {
-        self as u8
-    }
+    pub fn as_irq(self) -> u8 { self as u8 }
 }

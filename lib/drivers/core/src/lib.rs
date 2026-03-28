@@ -1,7 +1,7 @@
 #![no_std]
-
 extern crate alloc;
-pub mod block_device;
-pub mod pci;
-pub mod dma_allocator;
+
+pub mod cluster;
 pub mod partition;
+pub mod pci;
+pub mod stream;

@@ -3,5 +3,11 @@ name = "macros"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
+[lib]
+test = false
+
 [dependencies]
-kernel_commands = {path = "./kernel_commands"}
+kernel_commands = { path = "./kernel_commands" }

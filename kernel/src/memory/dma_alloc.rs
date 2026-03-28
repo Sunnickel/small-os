@@ -1,5 +1,5 @@
-use x86_64::structures::paging::FrameAllocator;
 use driver::dma::DmaAllocator;
+use x86_64::structures::paging::FrameAllocator;
 
 pub struct KernelDmaAllocator<'a> {
     frame_alloc: &'a mut crate::memory::BootInfoFrameAllocator,

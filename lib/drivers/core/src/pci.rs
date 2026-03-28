@@ -18,8 +18,8 @@ pub struct PciDevice {
     pub device_id: u16,
     pub class: u8,
     pub subclass: u8,
-    pub bar0_phys: Option<u64>,  // MMIO base (physical)
-    pub bar0_io: Option<u16>,    // I/O port base
+    pub bar0_phys: Option<u64>,
+    pub bar0_io: Option<u16>,
 }
 
 pub fn scan() -> impl Iterator<Item = PciDevice> {
@@ -35,7 +35,7 @@ pub fn scan() -> impl Iterator<Item = PciDevice> {
                 }
                 let device_id = ((val >> 16) & 0xFFFF) as u16;
                 let class_info = pci_read32(bus, device, func, 0x08);
-                let class    = ((class_info >> 24) & 0xFF) as u8;
+                let class = ((class_info >> 24) & 0xFF) as u8;
                 let subclass = ((class_info >> 16) & 0xFF) as u8;
 
                 let mut virtio_bar_idx: Option<u8> = None;
@@ -47,7 +47,7 @@ pub fn scan() -> impl Iterator<Item = PciDevice> {
                         let mut guard = 0u8;
                         while ptr >= 0x40 && guard < 16 {
                             let dw0 = pci_read32(bus, device, func, ptr);
-                            let cap_id   = (dw0 & 0xFF) as u8;
+                            let cap_id = (dw0 & 0xFF) as u8;
                             let next_ptr = ((dw0 >> 8) & 0xFF) as u8;
                             let cfg_type = ((dw0 >> 24) & 0xFF) as u8;
                             if cap_id == 0x09 && cfg_type == 0x01 {
@@ -113,9 +113,13 @@ pub fn scan() -> impl Iterator<Item = PciDevice> {
                     (bar_phys, bar_io)
                 };
                 results.push(PciDevice {
-                    bus, device, func,
-                    vendor_id, device_id,
-                    class, subclass,
+                    bus,
+                    device,
+                    func,
+                    vendor_id,
+                    device_id,
+                    class,
+                    subclass,
                     bar0_phys,
                     bar0_io,
                 });
@@ -132,17 +136,11 @@ pub fn assign_bar64(bus: u8, device: u8, func: u8, bar_offset: u8, assign_addr: 
     pci_write32(bus, device, func, 0x04, cmd & !0x2);
 
     let flags = pci_read32(bus, device, func, bar_offset) & 0xF;
-    pci_write32(bus, device, func, bar_offset,
-                (assign_addr & 0xFFFF_FFFF) as u32 | flags);
-    pci_write32(bus, device, func, bar_offset + 4,  // high half (BAR5 for BAR4)
-                (assign_addr >> 32) as u32);
+    pci_write32(bus, device, func, bar_offset, (assign_addr & 0xFFFF_FFFF) as u32 | flags);
+    pci_write32(bus, device, func, bar_offset + 4, (assign_addr >> 32) as u32);
 
     // Re-enable Memory Space + Bus Master
     pci_write32(bus, device, func, 0x04, cmd | 0x6);
-
-    // Verify
-    let rb_lo = pci_read32(bus, device, func, bar_offset);
-    let rb_hi = pci_read32(bus, device, func, bar_offset + 4);
 }
 
 pub fn pci_write32(bus: u8, device: u8, func: u8, offset: u8, value: u32) {
@@ -152,8 +150,8 @@ pub fn pci_write32(bus: u8, device: u8, func: u8, offset: u8, value: u32) {
         | ((func as u32) << 8)
         | ((offset as u32) & 0xFC);
     unsafe {
-        Port::<u32>::new(CONFIG_ADDRESS).write(address);  // 0xCF8
-        Port::<u32>::new(CONFIG_DATA).write(value);       // 0xCFC
+        Port::<u32>::new(CONFIG_ADDRESS).write(address); // 0xCF8
+        Port::<u32>::new(CONFIG_DATA).write(value); // 0xCFC
     }
 }
 
@@ -180,5 +178,3 @@ pub fn pci_read_bar_io(bus: u8, device: u8, func: u8, bar: u8) -> Option<u16> {
 
     Some((raw & !0x3) as u16) // mask off the low 2 flag bits
 }
-
-

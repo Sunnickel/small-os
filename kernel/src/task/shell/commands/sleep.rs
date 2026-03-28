@@ -1,5 +1,6 @@
-use crate::task::sleep::Sleep;
 use macros::commands::command;
+
+use crate::task::sleep::Sleep;
 
 #[command(
     name = "sleep",

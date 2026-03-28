@@ -1,0 +1,14 @@
+[package]
+name = "installer"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+test = false
+
+[lints]
+workspace = true
+
+[dependencies]
+macros = { path = "../lib/macros" }
+driver = { path = "../lib/drivers" }

@@ -1,2 +1,27 @@
+# Build output
 /target
 *.img
+*.iso
+
+# Cargo lock (keep this if it's a binary/OS project, remove if library)
+# Cargo.lock  ← do NOT ignore this, commit it for reproducible builds
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug / profiling artifacts
+*.pdb
+*.map
+perf.data
+perf.data.old
+
+# QEMU / VM artifacts
+*.qcow2
+*.vmdk
+serial.log

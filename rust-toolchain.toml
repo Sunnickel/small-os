@@ -1,4 +1,5 @@
 [toolchain]
-channel = "nightly"
-components = ["llvm-tools"]
+channel = "nightly-x86_64-pc-windows-msvc"
+profile = "minimal"
+components = ["llvm-tools", "rustfmt", "clippy", "rustc", "rust-src"]
 targets = ["x86_64-unknown-none"]

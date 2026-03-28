@@ -7,11 +7,11 @@ use heapless::String;
 use spin::Mutex;
 use spinning_top::Spinlock;
 
-use crate::memory::alloc::Locked;
-use crate::memory::types::fixed_size_block::FixedSizeBlockAllocator;
-use crate::screen::Writer;
+use crate::{
+    memory::{alloc::Locked, types::fixed_size_block::FixedSizeBlockAllocator},
+    screen::Writer,
+};
 
-//
 // ==========================
 // 🧠 MEMORY
 // ==========================
@@ -21,7 +21,6 @@ use crate::screen::Writer;
 pub static GLOBAL_ALLOCATOR: Locked<FixedSizeBlockAllocator> =
     Locked::new(FixedSizeBlockAllocator::new());
 
-//
 // ==========================
 // ⏱️ SCHEDULER / TIME
 // ==========================
@@ -33,7 +32,6 @@ pub static TIMER_TICKS: AtomicUsize = AtomicUsize::new(0);
 /// Signals executor to reschedule tasks
 pub static SHOULD_YIELD_FLAG: AtomicBool = AtomicBool::new(false);
 
-//
 // ==========================
 // ⌨️ INPUT SYSTEM
 // ==========================
@@ -50,7 +48,6 @@ pub static KEYBOARD_EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub static TIMER_WAKER: AtomicWaker = AtomicWaker::new();
 
-//
 // ==========================
 // 🖥️ OUTPUT / DEBUG
 // ==========================

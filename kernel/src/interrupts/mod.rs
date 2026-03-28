@@ -2,15 +2,16 @@ pub mod gdt;
 pub mod hardware_interrupt;
 pub mod interrupt_index;
 
-use crate::flags::{
-    KEYBOARD_EVENT_COUNT, KEYBOARD_WAKER, SCANCODE_QUEUE, SHOULD_YIELD_FLAG, TIMER_WAKER,
-};
-use crate::interrupts::hardware_interrupt::PICS;
-use crate::interrupts::interrupt_index::InterruptIndex;
-use crate::TIMER_TICKS;
 use core::sync::atomic::Ordering;
+
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+
+use crate::{
+    TIMER_TICKS,
+    flags::{KEYBOARD_EVENT_COUNT, KEYBOARD_WAKER, SCANCODE_QUEUE, SHOULD_YIELD_FLAG, TIMER_WAKER},
+    interrupts::{hardware_interrupt::PICS, interrupt_index::InterruptIndex},
+};
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -29,9 +30,7 @@ lazy_static! {
     };
 }
 
-pub fn init_idt() {
-    IDT.load();
-}
+pub fn init_idt() { IDT.load(); }
 
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
@@ -91,7 +90,6 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     KEYBOARD_WAKER.wake();
 
     unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_irq());
+        PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_irq());
     }
 }

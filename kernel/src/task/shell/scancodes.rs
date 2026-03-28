@@ -1,5 +1,7 @@
-use core::pin::Pin;
-use core::task::{Context, Poll};
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use crossbeam_queue::ArrayQueue;
 use futures_util::stream::Stream;

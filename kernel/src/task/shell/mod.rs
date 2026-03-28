@@ -3,17 +3,25 @@ pub mod history;
 mod scancodes;
 pub mod tokenizer;
 
-use alloc::format;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-use crate::task::shell::history::History;
-use crate::task::shell::scancodes::ScancodeStream;
-use crate::task::shell::tokenizer::parser::{execute_pipeline, parse_pipeline};
-use crate::task::shell::tokenizer::tokenize;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+
+use driver::fs::{fs_mutex, NtfsFile};
 use futures_util::stream::StreamExt;
-use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
+use pc_keyboard::{layouts, DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1};
 use spin::{Mutex, Once};
-use driver::fs::{root_directory, open, list_directory, NtfsFile};
+
+use crate::task::shell::{
+    history::History,
+    scancodes::ScancodeStream,
+    tokenizer::{
+        parser::{execute_pipeline, parse_pipeline},
+        tokenize,
+    },
+};
 
 // Track current path as string - NtfsFile is a snapshot, not live data
 static CURRENT_PATH: Once<Mutex<String>> = Once::new();
@@ -22,17 +30,11 @@ fn current_path_mutex() -> &'static Mutex<String> {
     CURRENT_PATH.get().expect("current directory not initialized")
 }
 
-fn get_current_path() -> String {
-    current_path_mutex().lock().clone()
-}
+fn get_current_path() -> String { current_path_mutex().lock().clone() }
 
-fn set_current_path(path: &str) {
-    *current_path_mutex().lock() = path.to_string();
-}
+fn set_current_path(path: &str) { *current_path_mutex().lock() = path.to_string(); }
 
-fn get_prompt() -> String {
-    format!("{}> ", get_current_path())
-}
+fn get_prompt() -> String { format!("{}> ", get_current_path()) }
 
 pub async fn shell_task() {
     unsafe {
@@ -47,11 +49,8 @@ pub async fn shell_task() {
     let mut line = heapless::String::<128>::new();
     let mut history = History::new();
 
-    let mut keyboard = Keyboard::new(
-        ScancodeSet1::default(),
-        layouts::De105Key,
-        HandleControl::Ignore,
-    );
+    let mut keyboard =
+        Keyboard::new(ScancodeSet1::default(), layouts::De105Key, HandleControl::Ignore);
 
     print!("{}", prefix);
 
@@ -133,47 +132,41 @@ fn resolve_path(path: &str) -> String {
             "/".to_string()
         } else {
             let parts: Vec<&str> = current.trim_end_matches('/').split('/').collect();
-            if parts.len() <= 1 {
-                "/".to_string()
-            } else {
-                parts[..parts.len()-1].join("/")
-            }
+            if parts.len() <= 1 { "/".to_string() } else { parts[..parts.len() - 1].join("/") }
         }
     } else {
         // Relative path
         let current = get_current_path();
-        if current == "/" {
-            format!("/{}", path)
-        } else {
-            format!("{}/{}", current, path)
-        }
+        if current == "/" { format!("/{}", path) } else { format!("{}/{}", current, path) }
     }
 }
 
 /// Open current directory fresh from filesystem
 pub fn open_current_dir() -> Result<NtfsFile, &'static str> {
+    let mut fs = fs_mutex().lock();
     let path = get_current_path();
-    open(&path).map_err(|_| "failed to open current directory")
+    fs.open(&path).map_err(|_| "failed to open current directory")
 }
 
 /// List current directory contents (fresh read)
 pub fn list_current_dir() -> Result<Vec<String>, &'static str> {
+    let mut fs = fs_mutex().lock();
     let dir = open_current_dir()?;
-    if !dir.is_directory() {
+    if !fs.is_directory(&dir).unwrap() {
         return Err("not a directory");
     }
-    list_directory(&dir).map_err(|_| "failed to list directory")
+    fs.list_directory(&dir).map_err(|_| "failed to list directory")
 }
 
 /// Change current directory
 pub fn change_dir(path: &str) -> Result<(), &'static str> {
     let new_path = resolve_path(path);
-
+    let mut fs = fs_mutex().lock();
     // Verify it exists and is a directory
-    match open(&new_path) {
+    match fs.open(&new_path) {
         Ok(dir) => {
-            println!("is_directory = {}", dir.is_directory());
-            if dir.is_directory() {
+            println!("is_directory = {}", fs.is_directory(&dir).unwrap());
+            if fs.is_directory(&dir).unwrap() {
                 set_current_path(&new_path);
                 Ok(())
             } else {
@@ -185,6 +178,4 @@ pub fn change_dir(path: &str) -> Result<(), &'static str> {
 }
 
 /// Get current path for commands
-pub fn current_dir_path() -> String {
-    get_current_path()
-}
+pub fn current_dir_path() -> String { get_current_path() }

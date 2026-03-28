@@ -1,9 +1,12 @@
+use std::{
+    env,
+    fs,
+    io::{Read, Seek, SeekFrom, Write},
+    path::Path,
+    process::{Command, Stdio},
+};
+
 use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
-use std::env;
-use std::fs;
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
-use std::process::{Command, Stdio};
 
 fn main() {
     let uefi_path = env!("UEFI_PATH");
@@ -29,10 +32,7 @@ fn main() {
         }
     };
 
-    let use_ahci = matches!(
-        args.get(2).map(|s| s.to_lowercase()).as_deref(),
-        Some("ahci")
-    );
+    let use_ahci = matches!(args.get(2).map(|s| s.to_lowercase()).as_deref(), Some("ahci"));
 
     let disk_path = "target/disk.img";
 
@@ -42,25 +42,20 @@ fn main() {
         eprintln!("Successfully created MBR disk with NTFS partition");
     }
 
-    let mut cmd = std::process::Command::new("qemu-system-x86_64");
+    let mut cmd = Command::new("qemu-system-x86_64");
     cmd.arg("-serial").arg("mon:stdio");
-    cmd.arg("-device")
-        .arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
+    cmd.arg("-device").arg("isa-debug-exit,iobase=0xf4,iosize=0x04");
 
     // Attach disk with proper cache settings
     if use_ahci {
         cmd.arg("-device").arg("ich9-ahci,id=ahci");
-        cmd.arg("-drive").arg(format!(
-            "id=disk0,file={disk_path},format=raw,if=none,cache=writethrough"
-        ));
-        cmd.arg("-device")
-            .arg("ide-hd,drive=disk0,bus=ahci.0");
+        cmd.arg("-drive")
+            .arg(format!("id=disk0,file={disk_path},format=raw,if=none,cache=writethrough"));
+        cmd.arg("-device").arg("ide-hd,drive=disk0,bus=ahci.0");
     } else {
-        cmd.arg("-drive").arg(format!(
-            "id=disk0,file={disk_path},format=raw,if=none,cache=writethrough"
-        ));
-        cmd.arg("-device")
-            .arg("virtio-blk-pci,drive=disk0,disable-legacy=on,disable-modern=off");
+        cmd.arg("-drive")
+            .arg(format!("id=disk0,file={disk_path},format=raw,if=none,cache=writethrough"));
+        cmd.arg("-device").arg("virtio-blk-pci,drive=disk0,disable-legacy=on,disable-modern=off");
     }
 
     if uefi {
@@ -70,19 +65,13 @@ fn main() {
         let code = prebuilt.get_file(Arch::X64, FileType::Code);
         let vars = prebuilt.get_file(Arch::X64, FileType::Vars);
 
+        cmd.arg("-drive").arg(format!("format=raw,file={uefi_path}"));
         cmd.arg("-drive")
-            .arg(format!("format=raw,file={uefi_path}"));
-        cmd.arg("-drive").arg(format!(
-            "if=pflash,format=raw,unit=0,file={},readonly=on",
-            code.display()
-        ));
-        cmd.arg("-drive").arg(format!(
-            "if=pflash,format=raw,unit=1,file={},snapshot=on",
-            vars.display()
-        ));
+            .arg(format!("if=pflash,format=raw,unit=0,file={},readonly=on", code.display()));
+        cmd.arg("-drive")
+            .arg(format!("if=pflash,format=raw,unit=1,file={},snapshot=on", vars.display()));
     } else {
-        cmd.arg("-drive")
-            .arg(format!("format=raw,file={bios_path}"));
+        cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
     }
 
     let mut child = cmd.spawn().expect("failed to start qemu-system-x86_64");
@@ -104,16 +93,14 @@ fn create_mbr_ntfs_disk(path: &str, size_mb: u32) -> Result<(), Box<dyn std::err
     let partition_start = 1u64;
     let partition_sectors = total_sectors - 1;
 
-    eprintln!("Creating {}MB MBR disk ({} sectors, NTFS at LBA {})",
-              size_mb, total_sectors, partition_start);
+    eprintln!(
+        "Creating {}MB MBR disk ({} sectors, NTFS at LBA {})",
+        size_mb, total_sectors, partition_start
+    );
 
     // Create raw file filled with zeroes
     {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)?;
+        let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).open(path)?;
 
         file.set_len(size_bytes)?;
 
@@ -137,7 +124,11 @@ fn create_mbr_ntfs_disk(path: &str, size_mb: u32) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-fn write_mbr(path: &str, start_lba: u64, sector_count: u64) -> Result<(), Box<dyn std::error::Error>> {
+fn write_mbr(
+    path: &str,
+    start_lba: u64,
+    sector_count: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut mbr = vec![0u8; 512];
 
     // Boot code: simple infinite loop if executed
@@ -158,11 +149,7 @@ fn write_mbr(path: &str, start_lba: u64, sector_count: u64) -> Result<(), Box<dy
     // LBA start
     mbr[0x1C6..0x1CA].copy_from_slice(&(start_lba as u32).to_le_bytes());
     // LBA count (cap at 0xFFFFFFFF)
-    let size = if sector_count > u32::MAX as u64 {
-        0xFFFFFFFFu32
-    } else {
-        sector_count as u32
-    };
+    let size = if sector_count > u32::MAX as u64 { 0xFFFFFFFFu32 } else { sector_count as u32 };
     mbr[0x1CA..0x1CE].copy_from_slice(&size.to_le_bytes());
 
     // Boot signature
@@ -184,7 +171,7 @@ fn format_ntfs_partition(
     sector_count: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path_obj = Path::new(path);
-    let abs_path = std::fs::canonicalize(path_obj)?;
+    let abs_path = fs::canonicalize(path_obj)?;
     let abs_path_str = abs_path.to_str().ok_or("Invalid path")?;
 
     // Convert Windows path to WSL path
@@ -255,7 +242,10 @@ echo "Done."
     }
 }
 
-fn verify_ntfs_boot_sector(path: &str, partition_lba: u64) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_ntfs_boot_sector(
+    path: &str,
+    partition_lba: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     let offset = partition_lba * 512;
     let mut buf = [0u8; 512];
 
@@ -265,19 +255,20 @@ fn verify_ntfs_boot_sector(path: &str, partition_lba: u64) -> Result<(), Box<dyn
 
     // Check for NTFS signature
     if &buf[3..11] == b"NTFS    " {
-        eprintln!("✓ NTFS boot sector verified at offset {} (OEM ID: {:02x?})",
-                  offset, &buf[3..11]);
+        eprintln!(
+            "✓ NTFS boot sector verified at offset {} (OEM ID: {:02x?})",
+            offset,
+            &buf[3..11]
+        );
 
         // Print some key fields
         let bytes_per_sector = u16::from_le_bytes([buf[0x0B], buf[0x0C]]);
         let sectors_per_cluster = buf[0x0D];
         let total_sectors = u64::from_le_bytes([
-            buf[0x28], buf[0x29], buf[0x2A], buf[0x2B],
-            buf[0x2C], buf[0x2D], buf[0x2E], buf[0x2F],
+            buf[0x28], buf[0x29], buf[0x2A], buf[0x2B], buf[0x2C], buf[0x2D], buf[0x2E], buf[0x2F],
         ]);
         let mft_start = u64::from_le_bytes([
-            buf[0x30], buf[0x31], buf[0x32], buf[0x33],
-            buf[0x34], buf[0x35], buf[0x36], buf[0x37],
+            buf[0x30], buf[0x31], buf[0x32], buf[0x33], buf[0x34], buf[0x35], buf[0x36], buf[0x37],
         ]);
 
         eprintln!("  Bytes per sector: {}", bytes_per_sector);

@@ -1,16 +1,16 @@
-use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use alloc::{boxed::Box, collections::BTreeMap};
 use core::pin::Pin;
+
 use spin::Mutex;
 
+pub mod cd;
 pub mod echo;
 pub mod help;
-pub mod sleep;
 pub mod ls;
-pub mod cd;
-pub mod pwd;
-pub mod touch;
 pub mod mkdir;
+pub mod pwd;
+pub mod sleep;
+pub mod touch;
 
 pub type CommandFuture<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 

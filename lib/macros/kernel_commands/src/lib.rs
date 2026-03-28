@@ -1,8 +1,22 @@
+#![no_std]
+extern crate alloc;
+
+use alloc::{format, string::ToString, vec::Vec};
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::Ident;
-use syn::parse::{Parse, ParseStream};
-use syn::{FnArg, ItemFn, LitStr, Pat, Token, Type, parse_macro_input, punctuated::Punctuated};
+use syn::{
+    FnArg,
+    Ident,
+    ItemFn,
+    LitStr,
+    Pat,
+    Token,
+    Type,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+    punctuated::Punctuated,
+};
 
 // ---------------------------------------------------------------------------
 // CommandArgs — parses the #[command(name="..", short="..", long="..")] attr
@@ -52,7 +66,8 @@ impl Parse for CommandArgs {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Returns true if `ty` is `Option<…>` (any path whose last segment is `Option`).
+/// Returns true if `ty` is `Option<…>` (any path whose last segment is
+/// `Option`).
 fn is_option(ty: &Type) -> bool {
     if let Type::Path(tp) = ty {
         if let Some(seg) = tp.path.segments.last() {
@@ -84,14 +99,18 @@ fn strip_flag_attr(attrs: &mut Vec<syn::Attribute>) {
 /// #[command(name = "echo", short = "Print text", long = "Prints text to screen")]
 /// async fn cmd_echo(text: String, count: u32, #[flag] upper: bool) {
 ///     for _ in 0..count {
-///         if upper { println!("{}", text.to_uppercase()); }
-///         else     { println!("{}", text); }
+///         if upper {
+///             println!("{}", text.to_uppercase());
+///         } else {
+///             println!("{}", text);
+///         }
 ///     }
 /// }
 /// ```
 ///
 /// Parameter rules:
-///   - `ident: Type`           → required positional arg (parse fails = early return)
+///   - `ident: Type`           → required positional arg (parse fails = early
+///     return)
 ///   - `ident: Option<Type>`   → optional positional arg (missing = None)
 ///   - `#[flag] ident: bool`   → `--ident` boolean flag, order-independent
 ///

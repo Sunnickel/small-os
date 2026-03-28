@@ -2,12 +2,11 @@
 #![no_main]
 extern crate alloc;
 
-use bootloader_api::config::Mapping;
-use bootloader_api::{BootInfo, BootloaderConfig, entry_point};
-use kernel::serial_println;
-use kernel::task::Task;
-use kernel::task::executor::Executor;
-use kernel::task::shell::shell_task;
+use bootloader_api::{BootInfo, BootloaderConfig, config::Mapping, entry_point};
+use kernel::{
+    serial_println,
+    task::{Task, executor::Executor, shell::shell_task},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -35,7 +34,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
     use x86_64::instructions::{nop, port::Port};
 
     unsafe {
-        let mut port = Port::new(0xf4);
+        let mut port = Port::new(0xF4);
         port.write(exit_code as u32);
     }
 
