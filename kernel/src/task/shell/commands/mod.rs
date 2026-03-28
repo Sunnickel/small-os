@@ -4,8 +4,13 @@ use core::pin::Pin;
 use spin::Mutex;
 
 pub mod echo;
-pub mod sleep;
 pub mod help;
+pub mod sleep;
+pub mod ls;
+pub mod cd;
+pub mod pwd;
+pub mod touch;
+pub mod mkdir;
 
 pub type CommandFuture<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 
@@ -13,7 +18,22 @@ pub type CommandFuture<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 #[derive(Clone, Copy)]
 pub struct CommandEntry {
     pub name: &'static str,
-    pub func: for<'a> fn(&'a [&'a str]) -> CommandFuture<'a>,
+    pub short: &'static str,
+    pub long: &'static str,
+    pub args: &'static [ArgSpec],
+    pub func: fn(&[&str]) -> CommandFuture<'static>,
+}
+
+pub struct ArgSpec {
+    pub name: &'static str,
+    pub ty: ArgType,
+    pub optional: bool,
+}
+
+pub enum ArgType {
+    Usize,
+    Str,
+    Bool,
 }
 
 pub type CommandFn = fn(&[&str]) -> ();
@@ -32,15 +52,13 @@ unsafe extern "C" {
 
 pub unsafe fn init_commands() {
     let start = core::ptr::addr_of!(__start_commands);
-    let end   = core::ptr::addr_of!(__stop_commands);
+    let end = core::ptr::addr_of!(__stop_commands);
 
     if start == end {
         return;
     }
 
-    let count = unsafe {
-        end.offset_from(start) as usize
-    };
+    let count = unsafe { end.offset_from(start) as usize };
 
     let mut map = COMMANDS.lock();
 

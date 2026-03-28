@@ -1,7 +1,15 @@
-use kernel_commands_macro::command;
-use crate::println;
+use alloc::string::String;
+use macros::commands::command;
 
-#[command("echo")]
-async fn cmd_echo(args: &[&str]) {
-    println!("{}", args.join(" "));
+#[command(
+    name = "echo",
+    short = "Print text",
+    long = "Prints the given text to the screen"
+)]
+async fn cmd_echo(text: String, #[flag] upper: bool) {
+    if upper {
+        println!("{}", text.to_uppercase());
+    } else {
+        println!("{}", text);
+    }
 }

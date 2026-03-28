@@ -1,14 +1,13 @@
+use crate::flags::GLOBAL_ALLOCATOR;
 use crate::memory::bump::BumpAllocator;
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr;
-use x86_64::structures::paging::{FrameAllocator, Size4KiB};
 use x86_64::VirtAddr;
-use crate::flags::GLOBAL_ALLOCATOR;
+use x86_64::structures::paging::{FrameAllocator, Size4KiB};
 
 /// The heap memory range.
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 100 * 1024;
-
 
 /// Align the given address upwards to the given alignment.
 /// `align` must be a power of two.

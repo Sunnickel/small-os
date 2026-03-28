@@ -1,9 +1,13 @@
-use kernel_commands_macro::command;
 use crate::task::sleep::Sleep;
+use macros::commands::command;
 
-#[command("sleep")]
-async fn cmd_echo(args: &[&str]) {
-    if let Ok(ticks) = args.join("")[6..].parse::<usize>() {
-        Sleep::new(ticks).await;
+#[command(
+    name = "sleep",
+    short = "Sleep for N ticks",
+    long = "Pauses the shell for the given number of ticks"
+)]
+async fn cmd_sleep(ticks: Option<usize>) {
+    if let Some(t) = ticks {
+        Sleep::new(t).await;
     }
 }

@@ -1,9 +1,12 @@
-use crate::println;
 use crate::task::shell::commands;
-use kernel_commands_macro::command;
+use macros::commands::command;
 
-#[command("help")]
-async fn cmd_help(_args: &[&str]) {
+#[command(
+    name = "help",
+    short = "List commands",
+    long = "Lists all available shell commands"
+)]
+async fn cmd_help() {
     let map = commands::COMMANDS.lock();
     for name in map.keys() {
         println!("  {}", name);

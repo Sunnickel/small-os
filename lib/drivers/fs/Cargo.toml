@@ -1,0 +1,12 @@
+[package]
+name = "driver_fs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ntfs_driver = {path = "ntfs_driver"}
+driver_core = {path = "../core"}
+
+ahci_driver = {path = "../block/ahci_driver"}
+virtio_driver = {path = "../block/virtio_driver"}
+spin = "0.10.0"

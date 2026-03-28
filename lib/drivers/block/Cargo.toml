@@ -1,0 +1,8 @@
+[package]
+name = "driver_block"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ahci_driver = {path = "ahci_driver"}
+virtio_driver = {path = "virtio_driver"}

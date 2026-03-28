@@ -3,10 +3,10 @@
 extern crate alloc;
 
 use bootloader_api::config::Mapping;
-use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
-use kernel::task::executor::{Executor};
-use kernel::task::{Task};
-use kernel::{serial_println};
+use bootloader_api::{BootInfo, BootloaderConfig, entry_point};
+use kernel::serial_println;
+use kernel::task::Task;
+use kernel::task::executor::Executor;
 use kernel::task::shell::shell_task;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

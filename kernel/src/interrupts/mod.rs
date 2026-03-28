@@ -2,13 +2,15 @@ pub mod gdt;
 pub mod hardware_interrupt;
 pub mod interrupt_index;
 
+use crate::flags::{
+    KEYBOARD_EVENT_COUNT, KEYBOARD_WAKER, SCANCODE_QUEUE, SHOULD_YIELD_FLAG, TIMER_WAKER,
+};
 use crate::interrupts::hardware_interrupt::PICS;
 use crate::interrupts::interrupt_index::InterruptIndex;
-use crate::{println, serial_println, TIMER_TICKS};
+use crate::TIMER_TICKS;
 use core::sync::atomic::Ordering;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
-use crate::flags::{KEYBOARD_EVENT_COUNT, KEYBOARD_WAKER, SCANCODE_QUEUE, SHOULD_YIELD_FLAG, TIMER_WAKER};
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -74,9 +76,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     }
 }
 
-extern "x86-interrupt" fn keyboard_interrupt_handler(
-    _stack_frame: InterruptStackFrame
-) {
+extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     use x86_64::instructions::port::Port;
 
     let mut port = Port::new(0x60);

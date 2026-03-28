@@ -7,7 +7,9 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
-pub unsafe fn enable_interrupts() { unsafe {
-    let mut pics = PICS.lock();
-    pics.write_masks(0xFC, 0xFF);
-}}
+pub unsafe fn enable_interrupts() {
+    unsafe {
+        let mut pics = PICS.lock();
+        pics.write_masks(0xFC, 0xFF);
+    }
+}

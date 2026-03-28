@@ -1,7 +1,7 @@
-use core::fmt;
-use bootloader_api::info::{FrameBufferInfo, PixelFormat};
-use font8x8::UnicodeFonts;
 pub(crate) use crate::flags::SCREEN_WRITER;
+use bootloader_api::info::{FrameBufferInfo, PixelFormat};
+use core::fmt;
+use font8x8::UnicodeFonts;
 
 pub struct Writer {
     pub framebuffer: &'static mut [u8],
@@ -9,7 +9,6 @@ pub struct Writer {
     pub x: usize,
     pub y: usize,
 }
-
 
 impl Writer {
     pub fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
@@ -78,9 +77,27 @@ impl Writer {
     pub fn write_string_at_cursor(&mut self, s: &str, r: u8, g: u8, b: u8) {
         for c in s.chars() {
             match c {
+                '\x08' => {
+                    if self.x >= 8 {
+                        self.x -= 8;
+                    } else if self.y >= 9 {
+                        self.y -= 9;
+                        self.x = (self.info.width / 8) * 8 - 8;
+                    }
+                    for row in 0..8 {
+                        for col in 0..8 {
+                            self.write_pixel(self.x + col, self.y + row, 0, 0, 0);
+                        }
+                    }
+                }
                 '\n' => {
                     self.x = 0;
-                    self.y += 9; // 8px font + 1px gap
+                    self.y += 9;
+
+                    if self.y + 9 > self.info.height {
+                        self.scroll_up();
+                        self.y -= 9;
+                    }
                 }
                 _ => {
                     self.write_char(self.x, self.y, c, r, g, b);
@@ -88,8 +105,39 @@ impl Writer {
                     if self.x + 8 > self.info.width {
                         self.x = 0;
                         self.y += 9;
+
+                        if self.y + 9 > self.info.height {
+                            self.scroll_up();
+                            self.y -= 9;
+                        }
                     }
                 }
+            }
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        let row_height = 9;
+        let width = self.info.width;
+        let height = self.info.height;
+        let bpp = self.info.bytes_per_pixel;
+
+        let stride = self.info.stride;
+
+        for y in row_height..height {
+            for x in 0..width {
+                let src = (y * stride + x) * bpp;
+                let dst = ((y - row_height) * stride + x) * bpp;
+
+                for i in 0..bpp {
+                    self.framebuffer[dst + i] = self.framebuffer[src + i];
+                }
+            }
+        }
+
+        for y in (height - row_height)..height {
+            for x in 0..width {
+                self.write_pixel(x, y, 0, 0, 0);
             }
         }
     }

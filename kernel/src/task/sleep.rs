@@ -1,7 +1,7 @@
+use crate::flags::{TIMER_TICKS, TIMER_WAKER};
 use core::pin::Pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll};
-use crate::flags::{TIMER_TICKS, TIMER_WAKER};
 
 pub struct Sleep {
     target: usize,
@@ -19,10 +19,7 @@ impl Sleep {
 impl Future for Sleep {
     type Output = ();
 
-    fn poll(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<()> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         if TIMER_TICKS.load(Ordering::Relaxed) >= self.target {
             Poll::Ready(())
         } else {

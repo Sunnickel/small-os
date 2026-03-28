@@ -5,7 +5,11 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = ["kernel", "macros"]
+members = [
+    "kernel",
+    "lib/drivers",
+    "lib/macros"
+]
 
 [profile.dev]
 opt-level = "z"
@@ -26,7 +30,14 @@ test = false
 bench = false
 
 [dependencies]
+# Qemu
 ovmf-prebuilt = "0.2.8"
+
+# Macros
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+anyhow = "1.0.102"
 
 [build-dependencies]
 kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }

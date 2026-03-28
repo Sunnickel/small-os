@@ -1,12 +1,13 @@
 pub mod alloc;
 pub mod bump;
 pub mod types;
+pub mod dma_alloc;
 
 use bootloader_api::info::MemoryRegions;
 use x86_64::structures::paging::{OffsetPageTable, PageTable};
 use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
+    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
 };
 
 /// Initialize a new OffsetPageTable.
@@ -121,12 +122,10 @@ impl BootInfoFrameAllocator {
             .iter()
             .filter(|r| r.kind == bootloader_api::info::MemoryRegionKind::Usable)
             .flat_map(|r| {
-                (r.start..r.end)
-                    .step_by(4096)
-                    .map(|addr| {
-                        let phys = PhysAddr::new(addr);
-                        PhysFrame::<Size4KiB>::containing_address(phys)
-                    })
+                (r.start..r.end).step_by(4096).map(|addr| {
+                    let phys = PhysAddr::new(addr);
+                    PhysFrame::<Size4KiB>::containing_address(phys)
+                })
             })
     }
 }

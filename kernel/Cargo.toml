@@ -7,7 +7,8 @@ edition = "2024"
 test = false
 
 [dependencies]
-kernel_commands_macro = { path = "../macros" }
+macros = { path = "../lib/macros" }
+driver = {path = "../lib/drivers"}
 
 bootloader_api = { version = "0.11" }
 font8x8 = { version = "0.3.1", default-features = false, features = ["unicode"] }

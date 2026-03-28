@@ -1,11 +1,11 @@
 pub mod executor;
-pub mod sleep;
 pub mod shell;
+pub mod sleep;
 
 use alloc::boxed::Box;
+use core::sync::atomic::{AtomicU64, Ordering};
 use core::task::{Context, Poll};
 use core::{future::Future, pin::Pin};
-use core::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct TaskId(u64);
