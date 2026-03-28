@@ -1,5 +1,5 @@
 # Project: small-os
-> Sunnickel | 04.10.2025
+> Sunnickel | 28.03.2026
 ---
 A small operating system written in Rust, aiming to achieve an Windows alternative that isnt directly linux. 
 
