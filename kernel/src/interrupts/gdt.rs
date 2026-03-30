@@ -1,14 +1,14 @@
 use lazy_static::lazy_static;
 use x86_64::{
-    VirtAddr,
     instructions::{
-        segmentation::{CS, DS, SS, Segment},
+        segmentation::{Segment, CS, DS, SS},
         tables::load_tss,
     },
     structures::{
         gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector},
         tss::TaskStateSegment,
     },
+    VirtAddr,
 };
 
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
@@ -47,7 +47,7 @@ lazy_static! {
     static ref GDT: (GlobalDescriptorTable, Selectors) = {
         let mut gdt = GlobalDescriptorTable::new();
         let code_selector = gdt.append(Descriptor::kernel_code_segment());
-        let data_selector = gdt.append(Descriptor::kernel_data_segment()); // ADD THIS
+        let data_selector = gdt.append(Descriptor::kernel_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
         (gdt, Selectors { code_selector, data_selector, tss_selector })
     };

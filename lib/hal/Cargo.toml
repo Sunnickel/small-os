@@ -8,3 +8,4 @@ workspace = true
 
 [lib]
 test = false
+harness = false

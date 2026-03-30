@@ -3,6 +3,20 @@
 version = 4
 
 [[package]]
+name = "acpi"
+version = "6.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b763acdc1d85c36d61acf97a59938f23202d0e8efe45e8759de10c02db242744"
+dependencies = [
+ "bit_field",
+ "bitflags 2.11.0",
+ "byteorder",
+ "log",
+ "pci_types",
+ "spinning_top 0.3.0",
+]
+
+[[package]]
 name = "ahci_driver"
 version = "0.1.0"
 dependencies = [
@@ -236,6 +250,7 @@ dependencies = [
 name = "driver_core"
 version = "0.1.0"
 dependencies = [
+ "acpi",
  "hal",
  "x86_64",
 ]
@@ -672,6 +687,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0ca629cbb3f0d5b699c338f0129ff78c9bfd7ea8b1258ad529bff490dc8ed5a"
 
 [[package]]
+name = "pci_types"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0c2a105c657261a938ff68ee231c199a3d80eef33976004829de761ef5b1a9b"
+dependencies = [
+ "bit_field",
+ "bitflags 2.11.0",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1016,9 +1041,9 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "uart_16550"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71cceed8939ba6ebde9d1e8a603b3c7f1a239a3db22e1ff465ed71ddca7a7d66"
+checksum = "22ee77075ecbc5e1c9b1236d03ff013dd77c7bb06da181c5c44f1f39b6cf3ff2"
 dependencies = [
  "bitflags 2.11.0",
 ]
@@ -1096,6 +1121,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "virtio_driver"
 version = "0.1.0"
 dependencies = [
+ "driver_core",
  "hal",
 ]
 

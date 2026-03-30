@@ -12,6 +12,7 @@ rustflags = ["-C", "link-arg=-Tkernel.ld",
 
 [env]
 CC = "clang"
+AR = "llvm-ar"
 
 [alias]
 xtask = "run --package xtask --"

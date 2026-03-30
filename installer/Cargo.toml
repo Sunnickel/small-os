@@ -5,10 +5,11 @@ edition = "2024"
 
 [lib]
 test = false
+harness = false
 
 [lints]
 workspace = true
 
 [dependencies]
 macros = { path = "../lib/macros" }
-driver = { path = "../lib/drivers" }
+driver = { path = "../lib/driver" }

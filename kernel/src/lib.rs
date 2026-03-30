@@ -20,12 +20,14 @@ use x86_64::VirtAddr;
 use crate::{
     interrupts::{
         gdt,
-        hardware_interrupt::{PICS, enable_interrupts},
+        hardware_interrupt::{enable_interrupts, PICS},
     },
-    memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
+    memory::{dma_alloc::KernelDmaAllocator, BootInfoFrameAllocator},
 };
 
 pub fn init(boot_info: &'static mut BootInfo) {
+    driver::core::set_debug_hook(|msg| serial_println!("{}", msg));
+
     // ── Screen ────────────────────────────────────────────────────────────────
     let framebuffer = boot_info.framebuffer.as_mut().unwrap();
     let info = framebuffer.info();
@@ -63,12 +65,16 @@ pub fn init(boot_info: &'static mut BootInfo) {
         .expect("heap initialization failed");
     serial_println!("7. Heap allocator initialized");
 
-    // ── File System
-    // ────────────────────────────────────────────────────────────────
+    // ── File System ───────────────────────────────────────────────────────────
     serial_println!("8. Scanning PCI bus...");
-
-    driver::pci::assign_bar64(0, 4, 0, 0x20, 0x8200_0000u64);
     let mut dma = KernelDmaAllocator::new(&mut frame_allocator, phys_mem_offset.as_u64());
+
+    let rsdp_phys =
+        boot_info.rsdp_addr.into_option().expect("bootloader did not provide RSDP address")
+            as usize;
+
+    driver::core::acpi::init_from_rsdp(rsdp_phys, phys_mem_offset.as_u64());
+
     driver::fs::init_auto(phys_mem_offset.as_u64(), &mut dma).expect("no block device found");
     serial_println!("9. Filesystem initialized");
 }

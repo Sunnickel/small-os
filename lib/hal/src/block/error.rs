@@ -13,6 +13,7 @@ pub enum BlockError {
     InvalidGeometry,
     UnsupportedSectorSize,
     Other,
+    InvalidRequest,
 }
 
 impl BlockError {
@@ -28,6 +29,7 @@ impl BlockError {
             Self::WriteError => "write error",
             Self::InvalidGeometry => "invalid geometry",
             Self::UnsupportedSectorSize => "unsupported sector size",
+            Self::InvalidRequest => "invalid request",
             Self::Other => "other",
         }
     }

@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "ahci_driver"
 version = "0.1.0"
 edition = "2024"
 
@@ -11,4 +11,4 @@ test = false
 harness = false
 
 [dependencies]
-kernel_commands = { path = "./kernel_commands" }
+hal = { path = "../../../hal" }
