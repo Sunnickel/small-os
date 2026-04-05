@@ -1,7 +1,10 @@
 [package]
 name = "kernel"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
@@ -11,8 +14,8 @@ test = false
 harness = false
 
 [dependencies]
-macros = { path = "../lib/macros" }
-driver = { path = "../lib/driver" }
+macros.workspace = true
+driver.workspace = true
 
 bootloader_api.workspace = true
 font8x8.workspace = true

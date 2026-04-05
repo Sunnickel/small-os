@@ -1,6 +1,5 @@
 use core::{
     alloc::{GlobalAlloc, Layout},
-    mem,
     ptr,
     ptr::NonNull,
 };
@@ -76,8 +75,8 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         match list_index(&layout) {
             Some(index) => {
                 let new_node = ListNode { next: allocator.list_heads[index].take() };
-                assert!(mem::size_of::<ListNode>() <= BLOCK_SIZES[index]);
-                assert!(mem::align_of::<ListNode>() <= BLOCK_SIZES[index]);
+                assert!(size_of::<ListNode>() <= BLOCK_SIZES[index]);
+                assert!(align_of::<ListNode>() <= BLOCK_SIZES[index]);
                 let new_node_ptr = ptr as *mut ListNode;
                 unsafe {
                     new_node_ptr.write(new_node);

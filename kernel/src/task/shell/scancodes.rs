@@ -8,10 +8,10 @@ use futures_util::stream::Stream;
 
 use crate::flags::{KEYBOARD_WAKER, SCANCODE_QUEUE};
 
-pub struct ScancodeStream;
+pub(super) struct ScancodeStream;
 
 impl ScancodeStream {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         SCANCODE_QUEUE
             .try_init_once(|| ArrayQueue::new(256)) // 🔥 bigger buffer
             .expect("SCANCODE_QUEUE already initialized");

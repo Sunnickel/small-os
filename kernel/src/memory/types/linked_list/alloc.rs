@@ -1,6 +1,5 @@
 use core::{
     alloc::{GlobalAlloc, Layout},
-    mem,
     ptr,
 };
 
@@ -50,10 +49,10 @@ impl LinkedListAllocator {
     /// Returns the adjusted size and alignment as a (size, align) tuple.
     pub(crate) fn size_align(layout: Layout) -> (usize, usize) {
         let layout = layout
-            .align_to(mem::align_of::<ListNode>())
+            .align_to(align_of::<ListNode>())
             .expect("adjusting alignment failed")
             .pad_to_align();
-        let size = layout.size().max(mem::size_of::<ListNode>());
+        let size = layout.size().max(size_of::<ListNode>());
         (size, layout.align())
     }
 
@@ -71,10 +70,10 @@ impl LinkedListAllocator {
     /// Adds the given memory region to the front of the list.
     pub(crate) unsafe fn add_free_region(&mut self, addr: usize, size: usize) {
         assert_eq!(
-            align_up(addr.try_into().unwrap(), mem::align_of::<ListNode>() as u64),
+            align_up(addr.try_into().unwrap(), align_of::<ListNode>() as u64),
             addr.try_into().unwrap()
         );
-        assert!(size >= mem::size_of::<ListNode>());
+        assert!(size >= size_of::<ListNode>());
 
         // create a new list node and append it at the start of the list
         let mut node = ListNode::new(size);
@@ -123,7 +122,7 @@ impl LinkedListAllocator {
         }
 
         let excess_size = region.end_addr() - (alloc_end as usize);
-        if excess_size > 0 && excess_size < mem::size_of::<ListNode>() {
+        if excess_size > 0 && excess_size < size_of::<ListNode>() {
             return Err(());
         }
         Ok(alloc_start as usize)

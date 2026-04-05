@@ -65,7 +65,7 @@ pub fn _print(args: fmt::Arguments) {
 }
 
 #[doc(hidden)]
-pub fn _print_serial(args: core::fmt::Arguments) {
+pub fn _print_serial(args: fmt::Arguments) {
     use core::fmt::Write;
 
     use x86_64::instructions::interrupts;
@@ -78,7 +78,7 @@ pub fn _print_serial(args: core::fmt::Arguments) {
     });
 }
 
-pub fn buffer_from_interrupt(args: fmt::Arguments) {
+pub(crate) fn buffer_from_interrupt(args: fmt::Arguments) {
     let mut buf = INTERRUPT_LOG_BUFFER.lock();
     let _ = buf.write_fmt(args);
 }

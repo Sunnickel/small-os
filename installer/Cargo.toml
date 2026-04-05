@@ -1,7 +1,10 @@
 [package]
 name = "installer"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 test = false
@@ -11,5 +14,10 @@ harness = false
 workspace = true
 
 [dependencies]
-macros = { path = "../lib/macros" }
-driver = { path = "../lib/driver" }
+macros.workspace = true
+driver.workspace = true
+kernel.workspace = true
+hal.workspace = true
+
+bootloader_api.workspace = true
+x86_64.workspace = true

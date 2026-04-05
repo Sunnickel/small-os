@@ -3,10 +3,8 @@
 extern crate alloc;
 
 use bootloader_api::{BootInfo, BootloaderConfig, config::Mapping, entry_point};
-use kernel::{
-    serial_println,
-    task::{Task, executor::Executor, shell::shell_task},
-};
+use kernel::{init, serial_println, task::{Task, executor::Executor, shell::shell_task}};
+use x86_64::instructions::{nop, port::Port};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -22,7 +20,7 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 };
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    kernel::init(boot_info);
+    init(boot_info);
     serial_println!("Starting up...");
 
     let mut executor = Executor::new();
@@ -31,8 +29,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
-    use x86_64::instructions::{nop, port::Port};
-
     unsafe {
         let mut port = Port::new(0xF4);
         port.write(exit_code as u32);

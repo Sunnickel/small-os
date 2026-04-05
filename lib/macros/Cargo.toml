@@ -1,14 +1,17 @@
 [package]
 name = "macros"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
 
 [lib]
-test = false
-harness = false
+proc-macro = true
 
 [dependencies]
-kernel_commands = { path = "./kernel_commands" }
+syn.workspace = true
+quote.workspace = true

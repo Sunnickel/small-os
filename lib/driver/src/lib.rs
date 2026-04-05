@@ -1,17 +1,35 @@
 #![no_std]
+#![no_main]
 
-pub mod fs {
-    pub use driver_fs::*;
-}
+extern crate alloc;
+
+pub mod fs;
+
+mod block;
+mod core;
 
 pub mod pci {
-    pub use driver_core::pci::*;
+    pub use crate::core::pci::*;
 }
 
 pub mod dma {
     pub use hal::dma::DmaAllocator;
 }
 
-pub mod core {
-    pub use driver_core::{acpi_wrapper as acpi, set_debug_hook};
+pub mod util {
+    static mut DEBUG_HOOK: Option<fn(&str)> = None;
+
+    pub fn set_debug_hook(f: fn(&str)) {
+        unsafe {
+            DEBUG_HOOK = Some(f);
+        }
+    }
+
+    pub(crate) fn debug(msg: &str) {
+        unsafe {
+            if let Some(f) = DEBUG_HOOK {
+                f(msg);
+            }
+        }
+    }
 }

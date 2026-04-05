@@ -1,7 +1,10 @@
 [package]
 name = "driver"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
@@ -11,7 +14,8 @@ test = false
 harness = false
 
 [dependencies]
-driver_block = { path = "block" }
-driver_core = { path = "core" }
-driver_fs = { path = "fs" }
-hal = { path = "../hal" }
+hal.workspace = true
+spin.workspace = true
+bitflags.workspace = true
+acpi.workspace = true
+x86_64.workspace = true

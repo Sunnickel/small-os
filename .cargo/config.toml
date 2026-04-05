@@ -2,6 +2,7 @@
 bindeps = true
 
 [build]
+target = "x86_64-unknown-none"
 rustdocflags = ["--deny", "rustdoc::broken_intra_doc_links"]
 
 [target.x86_64-unknown-none]

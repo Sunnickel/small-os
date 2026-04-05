@@ -151,8 +151,9 @@ pub fn open_current_dir() -> Result<NtfsFile, &'static str> {
 /// List current directory contents (fresh read)
 pub fn list_current_dir() -> Result<Vec<String>, &'static str> {
     let mut fs = fs_mutex().lock();
-    let dir = open_current_dir()?;
-    if !fs.is_directory(&dir).unwrap() {
+    let path = get_current_path();
+    let dir = fs.open(&path).map_err(|_| "failed to open current directory")?;
+    if !fs.is_directory(&dir).unwrap_or(false) {
         return Err("not a directory");
     }
     fs.list_directory(&dir).map_err(|_| "failed to list directory")
@@ -162,11 +163,10 @@ pub fn list_current_dir() -> Result<Vec<String>, &'static str> {
 pub fn change_dir(path: &str) -> Result<(), &'static str> {
     let new_path = resolve_path(path);
     let mut fs = fs_mutex().lock();
-    // Verify it exists and is a directory
     match fs.open(&new_path) {
         Ok(dir) => {
-            println!("is_directory = {}", fs.is_directory(&dir).unwrap());
-            if fs.is_directory(&dir).unwrap() {
+            if fs.is_directory(&dir).unwrap_or(false) {
+                drop(fs);
                 set_current_path(&new_path);
                 Ok(())
             } else {
