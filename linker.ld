@@ -1,16 +1,15 @@
 ENTRY(_start)
+OUTPUT_FORMAT(elf64-x86-64)
 
 SECTIONS {
     . = 0x10000;
+    .text :
+        {
+            KEEP(*(.text.entry))
+            *(.text .text.*)
+        }
 
-    .text : {
-        *(.text.entry)   /* put _start first if you mark it */
-        *(.text .text.*)
-    }
-
-    .rodata : {
-        *(.rodata .rodata.*)
-    }
+    .rodata : { *(.rodata .rodata.*) }
 
     .commands : {
         __start_commands = .;
@@ -18,19 +17,19 @@ SECTIONS {
         __stop_commands = .;
     }
 
-    .data : {
-        *(.data .data.*)
-    }
+    .data : { *(.data .data.*) }
 
-    .bss : {
+    .bss :
+    {
         __bss_start = .;
         *(.bss .bss.*)
-        *(COMMON)
         __bss_end = .;
     }
 
-    /DISCARD/ : {
+    /DISCARD/ :
+    {
+        *(.comment)
         *(.eh_frame)
-        *(.note .note.*)
+        *(.rel.plt)
     }
 }

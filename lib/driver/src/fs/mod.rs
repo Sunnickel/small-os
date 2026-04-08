@@ -11,6 +11,7 @@ use hal::{block::BlockDevice, dma::DmaAllocator, io::IoError};
 use spin::{Mutex, Once};
 
 pub use crate::block::{ahci_driver::AhciDriver, virtio_driver::VirtioDriver};
+pub use crate::fs::ntfs::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo};
 use crate::{
     core::{
         partition::{
@@ -37,11 +38,14 @@ pub enum BlockDeviceEnum {
     Ahci(Partition<AhciDriver>),
 }
 
+
+#[derive(Debug)]
 pub enum DiskType {
     Virtio,
     Ahci,
 }
 
+#[derive(Debug)]
 pub struct DiskInfo {
     pub id: String,
     pub disk_type: DiskType,

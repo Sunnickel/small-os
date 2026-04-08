@@ -8,7 +8,7 @@ members = [
     "kernel",
     "lib/driver",
     "lib/macros",
-    "lib/hal",
+    "lib/hal", "lib/boot",
 ]
 
 [workspace.package]
@@ -78,10 +78,8 @@ module_name_repetitions = "allow"
 macros = { path = "lib/macros" }
 driver = { path = "lib/driver" }
 hal = { path = "lib/hal" }
+boot = {path = "lib/boot"}
 kernel = { path = "kernel" }
-
-# Boot
-bootloader_api = { version = "0.11.15" }
 
 # Hardware / x86
 x86_64 = { version = "0.15.4" }

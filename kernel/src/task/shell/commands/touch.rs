@@ -4,7 +4,7 @@ use alloc::{
 };
 
 use driver::fs::{fs_mutex, is_initialized, CreateOptions};
-use macros::commands::command;
+use macros::command;
 
 use crate::task::shell::{current_dir_path, resolve_path};
 

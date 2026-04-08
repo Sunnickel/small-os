@@ -1,6 +1,6 @@
 use alloc::string::String;
 
-use macros::commands::command;
+use macros::command;
 
 #[command(
     name = "cd",

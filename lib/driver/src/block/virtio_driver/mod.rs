@@ -1,13 +1,22 @@
-use alloc::borrow::ToOwned;
-use alloc::vec::Vec;
-use core::ptr;
-use core::sync::atomic::{fence, Ordering};
-use hal::block::{BlockDevice, BlockError};
-use hal::dma::DmaAllocator;
-use crate::block::virtio_driver::constants::*;
-use crate::block::virtio_driver::queue::{VirtQueue, VirtioBlkReq, VirtioCapInfo, VirtqAvail, VirtqDesc, VirtqUsed};
-use crate::pci::PciDevice;
-use crate::util::debug;
+use alloc::{borrow::ToOwned, vec::Vec};
+use core::{
+    ptr,
+    sync::atomic::{fence, Ordering},
+};
+
+use hal::{
+    block::{BlockDevice, BlockError},
+    dma::DmaAllocator,
+};
+
+use crate::{
+    block::virtio_driver::{
+        constants::*,
+        queue::{VirtQueue, VirtioBlkReq, VirtioCapInfo, VirtqAvail, VirtqDesc, VirtqUsed},
+    },
+    pci::PciDevice,
+    util::debug,
+};
 
 mod constants;
 mod queue;
@@ -374,10 +383,7 @@ impl VirtioDriver {
 
         // Check status
         if *(status_virt as *const u8) != VIRTIO_BLK_S_OK {
-            debug(&alloc::format!(
-                "VirtIO: error status={}",
-                *(status_virt as *const u8)
-            ));
+            debug(&alloc::format!("VirtIO: error status={}", *(status_virt as *const u8)));
             return Err(BlockError::DeviceError);
         }
 
@@ -412,5 +418,3 @@ impl BlockDevice for VirtioDriver {
 
     fn sector_size(&self) -> usize { SECTOR_SIZE }
 }
-
-

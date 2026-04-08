@@ -1,4 +1,4 @@
-use macros::commands::command;
+use macros::command;
 
 use crate::task::sleep::Sleep;
 

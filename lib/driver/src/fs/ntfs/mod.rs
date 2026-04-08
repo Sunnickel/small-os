@@ -20,10 +20,11 @@ use crate::{
         boot::BootSector,
         error::NtfsError,
         index::find_index_root_offset,
-        types::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo},
     },
     util::debug,
 };
+
+pub use crate::fs::ntfs::types::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo};
 
 pub struct NtfsDriver<D: BlockDevice> {
     pub device: D,

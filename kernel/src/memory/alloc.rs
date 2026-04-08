@@ -3,15 +3,16 @@ use core::{
     ptr,
 };
 
+use x86_64::structures::paging::{Page, PageTableFlags as Flags};
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Size4KiB},
 };
 
-use crate::{flags::GLOBAL_ALLOCATOR, memory::bump::BumpAllocator};
+use crate::{flags::GLOBAL_ALLOCATOR, memory::bump::BumpAllocator, outb};
 
 /// The heap memory range.
-pub const HEAP_START: usize = 0x_4444_4444_0000;
+pub const HEAP_START: usize = 0x100000;
 pub const HEAP_SIZE: usize = 100 * 1024;
 
 /// Align the given address upwards to the given alignment.
@@ -66,8 +67,6 @@ pub fn init_heap(
     mapper: &mut impl x86_64::structures::paging::Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
 ) -> Result<(), x86_64::structures::paging::mapper::MapToError<Size4KiB>> {
-    use x86_64::structures::paging::{Page, PageTableFlags as Flags};
-
     let page_range = {
         let heap_start = VirtAddr::new(HEAP_START as u64);
         let heap_end = heap_start + HEAP_SIZE as u64 - 1u64;
@@ -79,7 +78,10 @@ pub fn init_heap(
     for page in page_range {
         let frame = frame_allocator
             .allocate_frame()
-            .ok_or(x86_64::structures::paging::mapper::MapToError::FrameAllocationFailed)?;
+            .ok_or({
+                unsafe { outb(0x3F8, b'!'); }
+                x86_64::structures::paging::mapper::MapToError::FrameAllocationFailed
+            })?;
         let flags = Flags::PRESENT | Flags::WRITABLE;
         unsafe { mapper.map_to(page, frame, flags, frame_allocator)?.flush() };
     }

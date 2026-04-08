@@ -16,6 +16,10 @@ pub mod dma {
     pub use hal::dma::DmaAllocator;
 }
 
+pub mod acpi {
+    pub use crate::core::acpi_wrapper::*;
+}
+
 pub mod util {
     static mut DEBUG_HOOK: Option<fn(&str)> = None;
 

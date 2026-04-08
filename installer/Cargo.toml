@@ -6,7 +6,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[lib]
+[[bin]]
+name = "installer"
+path = "src/main.rs"
 test = false
 harness = false
 
@@ -18,6 +20,6 @@ macros.workspace = true
 driver.workspace = true
 kernel.workspace = true
 hal.workspace = true
+boot.workspace = true
 
-bootloader_api.workspace = true
 x86_64.workspace = true

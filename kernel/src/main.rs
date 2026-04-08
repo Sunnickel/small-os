@@ -2,8 +2,8 @@
 #![no_main]
 extern crate alloc;
 
-use bootloader_api::{BootInfo, BootloaderConfig, config::Mapping, entry_point};
-use kernel::{init, serial_println, task::{Task, executor::Executor, shell::shell_task}};
+use boot::BootInfo;
+use kernel::{init, serial_println, task::{executor::Executor, shell::shell_task, Task}};
 use x86_64::instructions::{nop, port::Port};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,13 +13,23 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
-pub static BOOTLOADER_CONFIG: BootloaderConfig = {
-    let mut config = BootloaderConfig::new_default();
-    config.mappings.physical_memory = Some(Mapping::Dynamic);
-    config
-};
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".text.entry")]
+pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
+    unsafe extern "C" {
+        static mut __bss_start: u8;
+        static mut __bss_end: u8;
+    }
 
-fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
+    unsafe {
+        let start_ptr = core::ptr::addr_of_mut!(__bss_start);
+        let end_ptr = core::ptr::addr_of_mut!(__bss_end);
+        let size = end_ptr as usize - start_ptr as usize;
+
+        // Zero out the memory
+        core::ptr::write_bytes(start_ptr, 0, size);
+    }
+
     init(boot_info);
     serial_println!("Starting up...");
 
@@ -39,4 +49,9 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
     }
 }
 
-entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {
+        x86_64::instructions::hlt();
+    }
+}

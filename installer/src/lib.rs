@@ -2,7 +2,6 @@
 #![no_main]
 extern crate alloc;
 
-use bootloader_api::BootInfo;
 use driver::fs::{DiskInfo, detect_disks, format_disk, get_disk_info, is_initialized};
 use kernel::{
     memory,
@@ -10,6 +9,7 @@ use kernel::{
     serial_println,
 };
 use x86_64::VirtAddr;
+use boot::BootInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -19,18 +19,36 @@ pub enum QemuExitCode {
 }
 
 pub fn init(boot_info: &'static mut BootInfo) {
-    // ── Serial output ──
+    unsafe {
+        // Print the number of memory regions found
+        let len = boot_info.memory_map_len;
+        if len == 0 {
+            outb(0x3F8, b'0'); // '0' regions found
+        } else {
+            outb(0x3F8, (len as u8).wrapping_add(b'0')); // Prints the digit
+        }
+    }
+
     driver::util::set_debug_hook(|msg| serial_println!("{}", msg));
 
-    // ── Memory ──
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
+    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
 
-    // Heap (needed for alloc)
-    memory::alloc::init_heap(&mut mapper, &mut frame_allocator).expect("heap init failed");
+    let mut frame_allocator = unsafe {
+        BootInfoFrameAllocator::init_from_raw(
+            boot_info.memory_map,
+            boot_info.memory_map_len,
+        )
+    };
 
-    // DMA allocator for disk drivers
+    // In init()
+    match memory::alloc::init_heap(&mut mapper, &mut frame_allocator) {
+        Ok(_) => unsafe { outb(0x3F8, b'f'); },
+        Err(_) => unsafe { outb(0x3F8, b'X'); }, // 'X' for Error
+    }
+
+    unsafe { outb(0x3F8, b'H'); }
     let mut dma = KernelDmaAllocator::new(&mut frame_allocator, phys_mem_offset.as_u64());
 
     // ── Filesystem / disk init ──
@@ -154,5 +172,15 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
 
     loop {
         nop();
+    }
+}
+
+pub unsafe fn outb(port: i32, char: u8) {
+    unsafe {
+        core::arch::asm!(
+        "out dx, al",
+        in("dx") port,
+        in("al") char,
+        );
     }
 }

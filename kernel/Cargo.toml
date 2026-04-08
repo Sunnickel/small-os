@@ -9,15 +9,17 @@ repository.workspace = true
 [lints]
 workspace = true
 
-[lib]
+[[bin]]
+name = "kernel"
+path = "src/main.rs"
 test = false
 harness = false
 
 [dependencies]
 macros.workspace = true
 driver.workspace = true
+boot.workspace = true
 
-bootloader_api.workspace = true
 font8x8.workspace = true
 spinning_top.workspace = true
 x86_64.workspace = true

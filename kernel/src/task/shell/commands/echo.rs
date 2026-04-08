@@ -1,6 +1,6 @@
 use alloc::string::String;
 
-use macros::commands::command;
+use macros::command;
 
 #[command(name = "echo", short = "Print text", long = "Prints the given text to the screen")]
 async fn cmd_echo(text: String, #[flag] upper: bool) {

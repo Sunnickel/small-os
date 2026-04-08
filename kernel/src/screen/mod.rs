@@ -1,8 +1,7 @@
 use core::fmt;
 
-use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use font8x8::UnicodeFonts;
-
+use boot::{FrameBufferInfo, PixelFormat};
 pub(crate) use crate::flags::SCREEN_WRITER;
 
 pub struct Writer {
@@ -24,14 +23,14 @@ impl Writer {
     }
 
     pub fn write_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
-        let offset = (y * self.info.stride + x) * self.info.bytes_per_pixel;
+        let offset = (y * (self.info.stride as usize) + x) * (self.info.bytes_per_pixel as usize);
         match self.info.pixel_format {
-            PixelFormat::Rgb => {
+            0 => {
                 self.framebuffer[offset] = r;
                 self.framebuffer[offset + 1] = g;
                 self.framebuffer[offset + 2] = b;
             }
-            PixelFormat::Bgr => {
+            1 => {
                 self.framebuffer[offset] = b;
                 self.framebuffer[offset + 1] = g;
                 self.framebuffer[offset + 2] = r;
@@ -45,7 +44,7 @@ impl Writer {
         let height = self.info.height;
         for y in 0..height {
             for x in 0..width {
-                self.write_pixel(x, y, r, g, b);
+                self.write_pixel((x as usize), (y as usize  ), r, g, b);
             }
         }
     }
@@ -77,7 +76,7 @@ impl Writer {
                         self.x -= 8;
                     } else if self.y >= 9 {
                         self.y -= 9;
-                        self.x = (self.info.width / 8) * 8 - 8;
+                        self.x = ((self.info.width as usize) / 8) * 8 - 8;
                     }
                     for row in 0..8 {
                         for col in 0..8 {
@@ -89,7 +88,7 @@ impl Writer {
                     self.x = 0;
                     self.y += 9;
 
-                    if self.y + 9 > self.info.height {
+                    if self.y + 9 > (self.info.height as usize) {
                         self.scroll_up();
                         self.y -= 9;
                     }
@@ -97,11 +96,11 @@ impl Writer {
                 _ => {
                     self.write_char(self.x, self.y, c, r, g, b);
                     self.x += 8;
-                    if self.x + 8 > self.info.width {
+                    if self.x + 8 > (self.info.width as usize) {
                         self.x = 0;
                         self.y += 9;
 
-                        if self.y + 9 > self.info.height {
+                        if self.y + 9 > (self.info.height as usize) {
                             self.scroll_up();
                             self.y -= 9;
                         }
@@ -112,12 +111,11 @@ impl Writer {
     }
 
     fn scroll_up(&mut self) {
-        let row_height = 9;
-        let width = self.info.width;
-        let height = self.info.height;
-        let bpp = self.info.bytes_per_pixel;
-
-        let stride = self.info.stride;
+        let row_height = 9usize;
+        let width = self.info.width as usize;
+        let height = self.info.height as usize;
+        let bpp = self.info.bytes_per_pixel as usize;
+        let stride = self.info.stride as usize;
 
         for y in row_height..height {
             for x in 0..width {

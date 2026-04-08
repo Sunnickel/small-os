@@ -3,7 +3,6 @@ pub mod bump;
 pub mod dma_alloc;
 pub mod types;
 
-use bootloader_api::info::MemoryRegions;
 use x86_64::{
     PhysAddr,
     VirtAddr,
@@ -17,13 +16,8 @@ use x86_64::{
         Size4KiB,
     },
 };
+use boot::{E820Entry, MemoryRegion, MemoryRegionKind};
 
-/// Initialize a new OffsetPageTable.
-///
-/// # Safety
-/// The caller must guarantee that the complete physical memory is mapped to
-/// virtual memory at `physical_memory_offset`, and that this is called only
-/// once.
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     unsafe {
         let level_4_table = active_level_4_table(physical_memory_offset);
@@ -31,10 +25,6 @@ pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static>
     }
 }
 
-/// Returns a mutable reference to the active level 4 table.
-///
-/// # Safety
-/// Same requirements as `init`.
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
     use x86_64::registers::control::Cr3;
 
@@ -46,8 +36,6 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     unsafe { &mut *page_table_ptr }
 }
 
-/// Creates an example mapping for the given page to the VGA text buffer frame
-/// `0xb8000`.
 pub fn create_example_mapping(
     page: Page,
     mapper: &mut OffsetPageTable,
@@ -62,19 +50,12 @@ pub fn create_example_mapping(
     map_to_result.expect("map_to failed").flush();
 }
 
-/// A FrameAllocator that always returns `None`. Useful as a placeholder.
 pub struct EmptyFrameAllocator;
 
 unsafe impl FrameAllocator<Size4KiB> for EmptyFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> { None }
 }
 
-/// Translates a virtual address to the mapped physical address, or `None` if
-/// not mapped.
-///
-/// # Safety
-/// Caller must guarantee that `physical_memory_offset` correctly describes
-/// the offset at which physical memory is mapped into virtual memory.
 pub unsafe fn translate_addr(addr: VirtAddr, physical_memory_offset: VirtAddr) -> Option<PhysAddr> {
     translate_addr_inner(addr, physical_memory_offset)
 }
@@ -83,7 +64,6 @@ fn translate_addr_inner(addr: VirtAddr, physical_memory_offset: VirtAddr) -> Opt
     use x86_64::{registers::control::Cr3, structures::paging::page_table::FrameError};
 
     let (level_4_table_frame, _) = Cr3::read();
-
     let table_indexes = [addr.p4_index(), addr.p3_index(), addr.p2_index(), addr.p1_index()];
     let mut frame = level_4_table_frame;
 
@@ -103,29 +83,68 @@ fn translate_addr_inner(addr: VirtAddr, physical_memory_offset: VirtAddr) -> Opt
     Some(frame.start_address() + u64::from(addr.page_offset()))
 }
 
-/// A FrameAllocator that returns usable frames from the bootloader's memory
-/// map.
 pub struct BootInfoFrameAllocator {
-    memory_map: &'static [bootloader_api::info::MemoryRegion],
+    memory_map: &'static [MemoryRegion],
     next: usize,
 }
 
 impl BootInfoFrameAllocator {
     /// # Safety
-    /// The caller must guarantee that `memory_regions` describes valid,
-    /// complete memory regions and that this is only called once.
-    pub unsafe fn init(memory_regions: &'static MemoryRegions) -> Self {
-        BootInfoFrameAllocator { memory_map: memory_regions, next: 0 }
+    /// The caller must guarantee that the memory regions are valid and
+    /// complete, and that this is only called once.
+    pub unsafe fn init(memory_map: &'static [MemoryRegion]) -> Self {
+        BootInfoFrameAllocator { memory_map, next: 0 }
     }
 
+    /// # Safety
+    /// Same as init. Use when you have a raw pointer + length from
+    /// your stage2 BootInfo.
+    pub unsafe fn init_from_raw(ptr: u64, len: u64) -> Self {
+        // Convert E820 entries to our MemoryRegion format
+        // Store converted regions somewhere static
+        static mut REGIONS: [MemoryRegion; 256] = [MemoryRegion {
+            start: 0,
+            end: 0,
+            kind: MemoryRegionKind::Unknown,
+        }; 256];
+
+        let entries = unsafe {
+            core::slice::from_raw_parts(ptr as *const E820Entry, len as usize)
+        };
+
+        let mut count = 0;
+        for entry in entries {
+            if count >= 256 { break; }
+            let kind = match entry.entry_type {
+                1 => MemoryRegionKind::Usable,
+                2 => MemoryRegionKind::Reserved,
+                3 => MemoryRegionKind::AcpiReclaimable,
+                4 => MemoryRegionKind::AcpiNvs,
+                5 => MemoryRegionKind::BadMemory,
+                _ => MemoryRegionKind::Unknown,
+            };
+            unsafe {
+                REGIONS[count] = MemoryRegion {
+                    start: entry.base,
+                    end: entry.base + entry.length,
+                    kind,
+                };
+            }
+            count += 1;
+        }
+
+        BootInfoFrameAllocator {
+            memory_map: unsafe { &REGIONS[..count] },
+            next: 0,
+        }
+    }
     fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + '_ {
         self.memory_map
             .iter()
-            .filter(|r| r.kind == bootloader_api::info::MemoryRegionKind::Usable)
+            .filter(|r| r.kind == MemoryRegionKind::Usable)
             .flat_map(|r| {
                 (r.start..r.end).step_by(4096).map(|addr| {
-                    let phys = PhysAddr::new(addr);
-                    PhysFrame::<Size4KiB>::containing_address(phys)
+                    PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(addr))
                 })
             })
     }
