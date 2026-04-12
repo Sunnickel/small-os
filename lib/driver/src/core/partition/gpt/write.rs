@@ -21,7 +21,7 @@ use crate::core::partition::gpt::{
 ///
 /// WARNING: This is not atomic. If power is lost during write, the disk
 /// may be left with inconsistent headers. Always keep backups.
-pub fn write_gpt(dev: &mut impl BlockDevice, entries: &[GptEntry]) -> Result<(), GptError> {
+pub(crate) fn write_gpt(dev: &mut impl BlockDevice, entries: &[GptEntry]) -> Result<(), GptError> {
     if entries.len() > GPT_MAX_ENTRIES as usize {
         return Err(GptError::NoSpace);
     }

@@ -1,5 +1,4 @@
-use alloc::format;
-use alloc::string::String;
+use alloc::{format, string::String};
 
 use driver::fs::{fs_mutex, is_initialized};
 use macros::command;

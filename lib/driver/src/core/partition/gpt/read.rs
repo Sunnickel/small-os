@@ -15,7 +15,7 @@ use crate::core::partition::gpt::{
 };
 
 /// Read and validate GPT from device (tries primary, then backup)
-pub fn read_gpt(dev: &mut impl BlockDevice) -> Result<(GptHeader, Vec<GptEntry>), GptError> {
+pub(crate) fn read_gpt(dev: &mut (dyn BlockDevice)) -> Result<(GptHeader, Vec<GptEntry>), GptError> {
     let sector = dev.sector_size() as u64;
 
     // Try primary header at LBA 1
@@ -78,7 +78,7 @@ fn validate_header(header: &GptHeader) -> Result<(), GptError> {
     Ok(())
 }
 
-fn read_header_raw(dev: &mut impl BlockDevice, lba: u64, sector: u64) -> Option<Vec<u8>> {
+fn read_header_raw(dev: &mut (dyn  BlockDevice), lba: u64, sector: u64) -> Option<Vec<u8>> {
     if sector as usize > 4096 {
         // Sanity check sector size
         return None;
@@ -114,7 +114,7 @@ fn parse_header(raw: &[u8]) -> Result<GptHeader, GptError> {
 }
 
 fn read_entries(
-    dev: &mut impl BlockDevice,
+    dev: &mut (dyn  BlockDevice),
     sector: u64,
     h: &GptHeader,
 ) -> Result<Vec<GptEntry>, GptError> {

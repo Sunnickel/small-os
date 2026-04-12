@@ -1,6 +1,6 @@
 /// Command header (one entry in the command list)
 #[repr(C, align(128))]
-pub struct CommandHeader {
+pub(super) struct CommandHeader {
     pub flags: u16,
     pub prdtl: u16,
     pub prdbc: u32,
@@ -11,7 +11,7 @@ pub struct CommandHeader {
 
 /// Host-to-Device Register FIS
 #[repr(C)]
-pub struct FisRegH2D {
+pub(super) struct FisRegH2D {
     pub fis_type: u8,
     pub pmport: u8,
     pub command: u8,
@@ -33,7 +33,7 @@ pub struct FisRegH2D {
 
 /// Physical Region Descriptor Table entry
 #[repr(C)]
-pub struct PrdtEntry {
+pub(super) struct PrdtEntry {
     pub dba: u32,
     pub dbau: u32,
     pub reserved: u32,
@@ -42,7 +42,7 @@ pub struct PrdtEntry {
 
 /// Command table
 #[repr(C, align(128))]
-pub struct CommandTable {
+pub(super) struct CommandTable {
     pub cfis: [u8; 64],
     pub acmd: [u8; 16],
     pub reserved: [u8; 48],

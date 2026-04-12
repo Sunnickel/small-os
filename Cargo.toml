@@ -8,7 +8,7 @@ members = [
     "kernel",
     "lib/driver",
     "lib/macros",
-    "lib/hal", "lib/boot",
+    "lib/hal", "lib/boot", "xtask",
 ]
 
 [workspace.package]
@@ -112,6 +112,15 @@ syn = { version = "2.0.117", features = ["full"] }
 
 # Build tooling
 anyhow = "1.0.102"
+
+# XTask tooling
+clap = { version = "4", features = ["derive"] }
+rayon = "1.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+dashmap = "6"
+hex = "0.4.3"
 
 # Drivers
 bitflags = { version = "2.11.0" }

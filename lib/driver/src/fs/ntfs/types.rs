@@ -277,7 +277,7 @@ impl ReparsePoint {
         let tag = u32::from_le_bytes(data[0..4].try_into().ok()?);
         let data_length = u16::from_le_bytes(data[4..6].try_into().ok()?) as usize;
         let reparse_data = data.get(8..8usize.saturating_add(data_length))?.to_vec();
-        
+
         let reparse_tag = match tag {
             Self::TAG_SYMLINK => ReparseTag::SymbolicLink,
             Self::TAG_MOUNT_POINT => ReparseTag::MountPoint,
@@ -349,7 +349,7 @@ pub struct CreateOptions {
 /// NTFS attribute type codes
 #[repr(u32)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AttributeType {
+pub(crate) enum AttributeType {
     StandardInformation = 0x10,
     AttributeList = 0x20,
     FileName = 0x30,

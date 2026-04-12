@@ -1,7 +1,7 @@
 use hal::io::IoError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum GptError {
+pub(crate) enum GptError {
     InvalidSignature,
     InvalidHeaderCrc,
     InvalidEntriesCrc,
@@ -14,7 +14,5 @@ pub enum GptError {
 }
 
 impl From<IoError> for GptError {
-    fn from(_: IoError) -> Self {
-        Self::IoError
-    }
+    fn from(_: IoError) -> Self { Self::IoError }
 }

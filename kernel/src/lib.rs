@@ -13,16 +13,17 @@ pub mod memory;
 pub mod screen;
 pub mod task;
 
+use boot::BootInfo;
 use flags::*;
 pub use macros::{_print, _print_raw, _print_serial};
 use x86_64::VirtAddr;
-use boot::BootInfo;
+
 use crate::{
     interrupts::{
         gdt,
-        hardware_interrupt::{enable_interrupts, PICS},
+        hardware_interrupt::{PICS, enable_interrupts},
     },
-    memory::{dma_alloc::KernelDmaAllocator, BootInfoFrameAllocator},
+    memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
 };
 
 pub fn init(boot_info: &'static mut BootInfo) {
@@ -30,12 +31,8 @@ pub fn init(boot_info: &'static mut BootInfo) {
 
     // ── Screen ──
     let fb_info = boot_info.framebuffer;
-    let buffer = unsafe {
-        core::slice::from_raw_parts_mut(
-            fb_info.addr as *mut u8,
-            fb_info.size as usize,
-        )
-    };
+    let buffer =
+        unsafe { core::slice::from_raw_parts_mut(fb_info.addr as *mut u8, fb_info.size as usize) };
     screen::Writer::init(buffer, fb_info);
     serial_println!("1. Screen initialized");
 
@@ -58,10 +55,7 @@ pub fn init(boot_info: &'static mut BootInfo) {
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe {
-        BootInfoFrameAllocator::init_from_raw(
-            boot_info.memory_map,
-            boot_info.memory_map_len,
-        )
+        BootInfoFrameAllocator::init_from_raw(boot_info.memory_map, boot_info.memory_map_len)
     };
     serial_println!("6. Memory initialized");
 
@@ -72,17 +66,6 @@ pub fn init(boot_info: &'static mut BootInfo) {
     // ── ACPI / FS ──
     let mut dma = KernelDmaAllocator::new(&mut frame_allocator, phys_mem_offset.as_u64());
     driver::acpi::init_from_rsdp(boot_info.rsdp_addr as usize, phys_mem_offset.as_u64());
-    driver::fs::init_auto(phys_mem_offset.as_u64(), &mut dma)
-        .expect("no block device found");
+    driver::fs::init_auto(phys_mem_offset.as_u64(), &mut dma).expect("no block device found");
     serial_println!("8. Filesystem initialized");
-}
-
-pub unsafe fn outb(port: i32, char: u8) {
-    unsafe {
-        core::arch::asm!(
-        "out dx, al",
-        in("dx") port,
-        in("al") char,
-        );
-    }
 }

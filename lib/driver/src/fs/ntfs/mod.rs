@@ -15,16 +15,11 @@ use alloc::{
 
 use hal::block::BlockDevice;
 
+pub use crate::fs::ntfs::types::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo};
 use crate::{
-    fs::ntfs::{
-        boot::BootSector,
-        error::NtfsError,
-        index::find_index_root_offset,
-    },
+    fs::ntfs::{boot::BootSector, error::NtfsError, index::find_index_root_offset},
     util::debug,
 };
-
-pub use crate::fs::ntfs::types::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo};
 
 pub struct NtfsDriver<D: BlockDevice> {
     pub device: D,
@@ -222,4 +217,3 @@ impl<D: BlockDevice> NtfsDriver<D> {
         result
     }
 }
-

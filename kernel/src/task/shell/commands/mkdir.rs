@@ -3,7 +3,7 @@ use alloc::{
     vec,
 };
 
-use driver::fs::{fs_mutex, is_initialized, CreateOptions};
+use driver::fs::{CreateOptions, fs_mutex, is_initialized};
 use macros::command;
 
 use crate::task::shell::{current_dir_path, resolve_path};

@@ -1,0 +1,18 @@
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+
+find_program(CROSS_C   x86_64-elf-gcc   REQUIRED)
+find_program(CROSS_ASM nasm              REQUIRED)
+find_program(CROSS_LD  x86_64-elf-ld    REQUIRED)
+
+set(CMAKE_C_COMPILER   ${CROSS_C})
+set(CMAKE_ASM_NASM_COMPILER ${CROSS_ASM})
+set(CMAKE_LINKER       ${CROSS_LD})
+
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+set(CMAKE_ASM_NASM_COMPILE_OBJECT
+        "<CMAKE_ASM_NASM_COMPILER> <FLAGS> -f elf64 -o <OBJECT> <SOURCE>")
+
+set(CMAKE_ASM_NASM_FLAGS "-g -F dwarf")

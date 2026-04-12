@@ -1,23 +1,27 @@
 use alloc::{format, string::String, vec, vec::Vec};
+
 use hal::block::BlockDevice;
 
 use crate::core::partition::gpt::{
-    error::GptError, read::read_gpt, structs::GptEntry, write::write_gpt,
-    GPT_ENTRY_SIZE, GPT_FIRST_USABLE_LBA, GPT_HEADER_SIZE, GPT_MAX_ENTRIES,
-    GPT_RESERVED_LBAS, generate_guid,
+    GPT_FIRST_USABLE_LBA,
+    GPT_RESERVED_LBAS,
+    error::GptError,
+    generate_guid,
+    read::read_gpt,
+    structs::GptEntry,
+    write::write_gpt,
 };
 
 /// NTFS partition type GUID
 const NTFS_GUID: [u8; 16] = [
-    0xEB, 0xD0, 0xA0, 0xA2, 0xB9, 0xE5, 0x44, 0x33,
-    0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7,
+    0xEB, 0xD0, 0xA0, 0xA2, 0xB9, 0xE5, 0x44, 0x33, 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7,
 ];
 
-pub struct GptManager;
+pub(crate) struct GptManager;
 
 impl GptManager {
     /// Format disk with fresh GPT and single NTFS partition
-    pub fn format_disk(
+    pub(crate) fn format_disk(
         dev: &mut impl BlockDevice,
         partition_size_sectors: u64,
     ) -> Result<(u64, u64), GptError> {
@@ -30,7 +34,9 @@ impl GptManager {
         let first_usable = GPT_FIRST_USABLE_LBA;
         let last_usable = total_sectors.saturating_sub(GPT_RESERVED_LBAS + 1);
 
-        let partition_size = if partition_size_sectors == 0 || partition_size_sectors > (last_usable - first_usable) {
+        let partition_size = if partition_size_sectors == 0
+            || partition_size_sectors > (last_usable - first_usable)
+        {
             last_usable - first_usable
         } else {
             partition_size_sectors
@@ -53,7 +59,7 @@ impl GptManager {
     }
 
     /// Read disk GPT information
-    pub fn read_disk(dev: &mut impl BlockDevice) -> Result<GptInfo, GptError> {
+    pub(crate) fn read_disk(dev: &mut dyn BlockDevice) -> Result<GptInfo, GptError> {
         let (header, entries) = read_gpt(dev)?;
 
         let partitions: Vec<PartitionInfo> = entries
@@ -81,7 +87,7 @@ impl GptManager {
     }
 
     /// Find first NTFS partition offset in bytes
-    pub fn find_ntfs_offset(dev: &mut impl BlockDevice) -> Result<u64, GptError> {
+    pub(crate) fn find_ntfs_offset(dev: &mut impl BlockDevice) -> Result<u64, GptError> {
         let (_, entries) = read_gpt(dev)?;
 
         for entry in entries {
@@ -94,7 +100,10 @@ impl GptManager {
         Err(GptError::NotFound)
     }
 
-    pub(crate) fn create_ntfs_boot_sector(total_sectors: u64, sector_size: usize) -> Result<Vec<u8>, GptError> {
+    pub(crate) fn create_ntfs_boot_sector(
+        total_sectors: u64,
+        sector_size: usize,
+    ) -> Result<Vec<u8>, GptError> {
         let mut boot = vec![0u8; sector_size];
 
         // Jump instruction
@@ -128,7 +137,7 @@ impl GptManager {
 }
 
 #[derive(Debug, Clone)]
-pub struct GptInfo {
+pub(crate) struct GptInfo {
     pub disk_guid: String,
     pub sector_size: usize,
     pub total_sectors: u64,
@@ -159,10 +168,8 @@ fn str_to_utf16le(s: &str) -> [u16; 36] {
 
 fn utf16le_to_str(name: &[u16; 36]) -> String {
     let len = name.iter().position(|&c| c == 0).unwrap_or(36);
-    let chars: Vec<u8> = name[..len]
-        .iter()
-        .filter_map(|&c| if c < 128 { Some(c as u8) } else { None })
-        .collect();
+    let chars: Vec<u8> =
+        name[..len].iter().filter_map(|&c| if c < 128 { Some(c as u8) } else { None }).collect();
     String::from_utf8_lossy(&chars).into_owned()
 }
 
@@ -172,11 +179,15 @@ fn format_guid(guid: &[u8; 16]) -> String {
         u32::from_le_bytes([guid[0], guid[1], guid[2], guid[3]]),
         u16::from_le_bytes([guid[4], guid[5]]),
         u16::from_le_bytes([guid[6], guid[7]]),
-        guid[8], guid[9],
-        guid[10], guid[11], guid[12], guid[13], guid[14], guid[15]
+        guid[8],
+        guid[9],
+        guid[10],
+        guid[11],
+        guid[12],
+        guid[13],
+        guid[14],
+        guid[15]
     )
 }
 
-fn is_zero_guid(guid: &[u8; 16]) -> bool {
-    guid.iter().all(|&b| b == 0)
-}
+fn is_zero_guid(guid: &[u8; 16]) -> bool { guid.iter().all(|&b| b == 0) }

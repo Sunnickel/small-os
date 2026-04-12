@@ -7,7 +7,7 @@ use crate::block::ahci_driver::{
     fis::{CommandHeader, CommandTable, FisRegH2D},
 };
 
-pub struct PortState {
+pub(super) struct PortState {
     pub port_base: usize,
     pub cmd_list_phys: u64,
     pub cmd_list_virt: usize,
@@ -18,7 +18,7 @@ pub struct PortState {
 }
 
 impl PortState {
-    pub unsafe fn init(
+    pub(super) unsafe fn init(
         mmio_base: usize,
         port: usize,
         dma: &mut impl DmaAllocator,
@@ -65,7 +65,7 @@ impl PortState {
         }
     }
 
-    pub unsafe fn issue_command(
+    pub(super) unsafe fn issue_command(
         &mut self,
         command: u8,
         lba: u64,
@@ -121,7 +121,11 @@ impl PortState {
         }
     }
 
-    pub unsafe fn read_sectors(&mut self, lba: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+    pub(super) unsafe fn read_sectors(
+        &mut self,
+        lba: u64,
+        buf: &mut [u8],
+    ) -> Result<(), BlockError> {
         unsafe {
             self.issue_command(ATA_CMD_READ_SECTORS, lba, 1, false)?;
             ptr::copy_nonoverlapping(
@@ -133,7 +137,7 @@ impl PortState {
         }
     }
 
-    pub unsafe fn write_sectors(&mut self, lba: u64, buf: &[u8]) -> Result<(), BlockError> {
+    pub(super) unsafe fn write_sectors(&mut self, lba: u64, buf: &[u8]) -> Result<(), BlockError> {
         unsafe {
             ptr::copy_nonoverlapping(
                 buf.as_ptr(),

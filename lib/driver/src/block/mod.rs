@@ -1,2 +1,2 @@
-pub mod ahci_driver;
-pub mod virtio_driver;
+pub(crate) mod ahci_driver;
+pub(crate) mod virtio_driver;

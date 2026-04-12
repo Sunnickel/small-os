@@ -3,12 +3,28 @@
 extern crate alloc;
 
 use boot::BootInfo;
-use installer::{init, outb};
+use installer::init;
+use kernel::serial_println;
 
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.entry")]
 pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
-    unsafe { outb(0x3F8, b'R'); }
+    // Print the raw pointer value before touching anything
+    let ptr = boot_info as *mut BootInfo as u64;
+    // write ptr to serial directly via port I/O to avoid any allocator use
+    unsafe {
+        let mut port = x86_64::instructions::port::Port::<u8>::new(0x3F8);
+        for byte in b"ptr=" {
+            port.write(*byte);
+        }
+        for i in (0..16).rev() {
+            let nibble = ((ptr >> (i * 4)) & 0xF) as u8;
+            port.write(if nibble < 10 { b'0' + nibble } else { b'a' + nibble - 10 });
+        }
+        port.write(b'\n');
+    }
+
+    serial_println!("Starting up");
 
     unsafe extern "C" {
         static mut __bss_start: u8;
@@ -27,14 +43,14 @@ pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
     }
     init(boot_info);
 
-    loop { x86_64::instructions::hlt(); }
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    unsafe {
-        outb(0x3F8, b'P');
-    }
+    serial_println!("panic! {}\n", _info);
     loop {
         x86_64::instructions::hlt();
     }

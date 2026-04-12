@@ -72,7 +72,7 @@ pub fn _print_serial(args: fmt::Arguments) {
 
     interrupts::without_interrupts(|| {
         let mut buf: String<256> = String::new();
-        if write!(&mut buf, "{}", args).is_ok() {
+        if write!(&mut buf, "[kernel] {}", args).is_ok() {
             SERIAL1.lock().send_bytes_exact(buf.as_bytes());
         }
     });

@@ -1,8 +1,9 @@
-pub mod gpt;
+pub(crate) mod gpt;
 
 use alloc::string::ToString;
 
 use hal::{block::BlockDevice, io::IoError};
+
 use crate::util::debug;
 
 pub struct Partition<B: BlockDevice> {
@@ -21,7 +22,7 @@ impl<B: BlockDevice> BlockDevice for Partition<B> {
                 self.start_offset,
                 self.start_offset + offset
             )
-                .to_string(),
+            .to_string(),
         );
 
         self.inner.read_at(self.start_offset + offset, buf)
@@ -36,7 +37,7 @@ impl<B: BlockDevice> BlockDevice for Partition<B> {
                 self.start_offset,
                 self.start_offset + offset
             )
-                .to_string(),
+            .to_string(),
         );
 
         if offset + buf.len() as u64 > self.size {
@@ -47,7 +48,7 @@ impl<B: BlockDevice> BlockDevice for Partition<B> {
                     buf.len(),
                     self.size
                 )
-                    .to_string(),
+                .to_string(),
             );
             return Err(IoError::Other);
         }

@@ -1,6 +1,4 @@
-pub mod acpi_wrapper;
-pub mod cluster;
-pub mod partition;
-pub mod pci;
-
-
+pub(crate) mod acpi_wrapper;
+pub(crate) mod cluster;
+pub(crate) mod partition;
+pub(crate) mod pci;

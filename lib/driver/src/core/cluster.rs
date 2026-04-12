@@ -11,7 +11,7 @@ use hal::{block::BlockDevice, io::IoError};
 ///
 /// # Errors
 /// Returns `IoError::InvalidInput` if the total size overflows usize or u64.
-pub fn read_clusters<D: BlockDevice>(
+pub(crate) fn read_clusters<D: BlockDevice>(
     device: &mut D,
     cluster_number: u64,
     length: u64,
@@ -30,9 +30,7 @@ pub fn read_clusters<D: BlockDevice>(
     };
 
     let mut buf = vec![0u8; total_bytes_usize];
-    let offset = cluster_number
-        .checked_mul(bytes_per_cluster)
-        .ok_or(IoError::InvalidInput)?;
+    let offset = cluster_number.checked_mul(bytes_per_cluster).ok_or(IoError::InvalidInput)?;
     device.read_at(offset, &mut buf)?;
     Ok(buf)
 }

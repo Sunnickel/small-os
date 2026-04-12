@@ -1,6 +1,6 @@
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct GptHeader {
+pub(crate) struct GptHeader {
     pub signature: [u8; 8],
     pub revision: [u8; 4],
     pub header_size: u32,
@@ -19,7 +19,7 @@ pub struct GptHeader {
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct GptEntry {
+pub(crate) struct GptEntry {
     pub type_guid: [u8; 16],
     pub unique_guid: [u8; 16],
     pub start_lba: u64,

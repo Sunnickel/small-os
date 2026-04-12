@@ -1,9 +1,15 @@
 use core::ptr;
-use hal::block::{BlockDevice, BlockError};
-use hal::dma::DmaAllocator;
-use hal::io::IoError;
-use crate::block::ahci_driver::constants::{HBA_GHC, HBA_PI, SECTOR_SIZE};
-use crate::block::ahci_driver::port::PortState;
+
+use hal::{
+    block::{BlockDevice, BlockError},
+    dma::DmaAllocator,
+    io::IoError,
+};
+
+use crate::block::ahci_driver::{
+    constants::{HBA_GHC, HBA_PI, SECTOR_SIZE},
+    port::PortState,
+};
 
 mod constants;
 mod fis;
@@ -15,7 +21,7 @@ pub struct AhciDriver {
 }
 
 impl AhciDriver {
-    pub unsafe fn init(mmio_base: usize, dma: &mut impl DmaAllocator) -> Result<Self, BlockError> {
+    pub unsafe fn init(mmio_base: usize, dma: &mut impl DmaAllocator) -> Result<Self,  &'static str> {
         unsafe {
             // Enable AHCI mode
             let ghc = (mmio_base + HBA_GHC) as *mut u32;
@@ -23,12 +29,20 @@ impl AhciDriver {
 
             // Find first implemented port
             let pi = ptr::read_volatile((mmio_base + HBA_PI) as *const u32);
-            let port = (0..32).find(|&i| pi & (1 << i) != 0).ok_or(BlockError::DeviceError)?;
+            let port = (0..32).find(|&i| pi & (1 << i) != 0).ok_or(BlockError::DeviceError);
 
-            let port_state = PortState::init(mmio_base, port, dma)?;
+            if port.is_err() {
+                return Err(port.err().unwrap().as_str());
+            }
+
+            let port_state = PortState::init(mmio_base, port.unwrap(), dma);
+
+            if port_state.is_err() {
+                return Err(port_state.err().unwrap().as_str());
+            }
 
             Ok(Self {
-                port: port_state,
+                port: port_state.unwrap(),
                 sector_count: 131_071, // TODO: issue IDENTIFY DEVICE
             })
         }

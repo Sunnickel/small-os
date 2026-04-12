@@ -9,9 +9,9 @@ use alloc::{
     vec::Vec,
 };
 
-use driver::fs::{fs_mutex, NtfsFile};
+use driver::fs::{NtfsFile, fs_mutex};
 use futures_util::stream::StreamExt;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1};
+use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 use spin::{Mutex, Once};
 
 use crate::task::shell::{

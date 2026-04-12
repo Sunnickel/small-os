@@ -3,7 +3,11 @@
 extern crate alloc;
 
 use boot::BootInfo;
-use kernel::{init, serial_println, task::{executor::Executor, shell::shell_task, Task}};
+use kernel::{
+    init,
+    serial_println,
+    task::{Task, executor::Executor, shell::shell_task},
+};
 use x86_64::instructions::{nop, port::Port};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

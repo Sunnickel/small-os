@@ -1,13 +1,13 @@
-use alloc::{format, string::String, vec::Vec};
+use alloc::vec::Vec;
+
 use hal::block::BlockDevice;
-use crate::{
-    fs::ntfs::{
-        NtfsDriver,
-        attr::{find_data_attribute_offset, reapply_fixups, update_resident_data},
-        error::NtfsError,
-        index::add_directory_entry,
-        types::{CreateOptions, DataRun, NtfsFile},
-    },
+
+use crate::fs::ntfs::{
+    NtfsDriver,
+    attr::{find_data_attribute_offset, reapply_fixups, update_resident_data},
+    error::NtfsError,
+    index::add_directory_entry,
+    types::{CreateOptions, DataRun, NtfsFile},
 };
 
 /// Overwrite content of a resident file in-place (size must match)
@@ -36,7 +36,8 @@ pub(crate) fn write_resident_file<D: BlockDevice>(
 
     reapply_fixups(&mut record, driver.boot.bytes_per_sector as usize)?;
 
-    let mft_offset = driver.boot.mft_byte_offset() + file.record_number() * driver.mft_record_size as u64;
+    let mft_offset =
+        driver.boot.mft_byte_offset() + file.record_number() * driver.mft_record_size as u64;
     driver.device.write_at(mft_offset, &record).map_err(|_| NtfsError::IoError)?;
 
     Ok(())
@@ -82,7 +83,8 @@ pub(crate) fn create_file<D: BlockDevice>(
     reapply_fixups(&mut record, driver.boot.bytes_per_sector as usize)?;
 
     // Write MFT record
-    let mft_offset = driver.boot.mft_byte_offset() + new_record_number * driver.mft_record_size as u64;
+    let mft_offset =
+        driver.boot.mft_byte_offset() + new_record_number * driver.mft_record_size as u64;
     driver.device.write_at(mft_offset, &record).map_err(|_| NtfsError::IoError)?;
 
     // Update bitmap (FIXME: Currently not implemented - critical bug!)

@@ -1,6 +1,7 @@
 mod ntfs;
 
 use alloc::{
+    boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
@@ -10,13 +11,18 @@ use core::result::Result;
 use hal::{block::BlockDevice, dma::DmaAllocator, io::IoError};
 use spin::{Mutex, Once};
 
-pub use crate::block::{ahci_driver::AhciDriver, virtio_driver::VirtioDriver};
-pub use crate::fs::ntfs::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo};
+pub use crate::{
+    block::{ahci_driver::AhciDriver, virtio_driver::VirtioDriver},
+    fs::ntfs::{CreateOptions, NtfsFile, NtfsStat, VolumeInfo},
+};
 use crate::{
     core::{
         partition::{
             Partition,
-            gpt::manager::{GptManager, PartitionInfo},
+            gpt::{
+                GPT_FIRST_USABLE_LBA,
+                manager::{GptManager, PartitionInfo},
+            },
         },
         pci,
     },
@@ -26,9 +32,6 @@ use crate::{
 
 pub type NtfsFs = NtfsDriver<BlockDeviceEnum>;
 
-const PARTITION_OFFSET: u64 = 34 * 512; // Fallback raw offset
-const PARTITION_SIZE: u64 = 63 * 1024 * 1024;
-
 pub static FS: Once<Mutex<NtfsFs>> = Once::new();
 
 pub fn fs_mutex() -> &'static Mutex<NtfsFs> { FS.get().expect("filesystem not initialized") }
@@ -37,7 +40,6 @@ pub enum BlockDeviceEnum {
     Virtio(Partition<VirtioDriver>),
     Ahci(Partition<AhciDriver>),
 }
-
 
 #[derive(Debug)]
 pub enum DiskType {
@@ -49,7 +51,18 @@ pub enum DiskType {
 pub struct DiskInfo {
     pub id: String,
     pub disk_type: DiskType,
+    pub sector_count: u64,
 }
+
+pub struct DiskRegistry {
+    pub disks: Vec<DiskHandle>,
+}
+
+pub struct DiskHandle {
+    pub info: DiskInfo,
+    pub device: BlockDeviceEnum,
+}
+
 
 impl BlockDevice for BlockDeviceEnum {
     fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> Result<(), IoError> {
@@ -88,123 +101,49 @@ pub fn init_auto(phys_mem_offset: u64, dma: &mut impl DmaAllocator) -> Result<()
     }
 
     for dev in pci::scan() {
-        debug(&format!(
-            "Checking device {:02x}:{:02x}.{} vid={:#x} did={:#x}",
-            dev.bus, dev.device, dev.func, dev.vendor_id, dev.device_id
-        ));
-
         let is_virtio = dev.vendor_id == pci::VENDOR_VIRTIO
             && (dev.device_id == pci::DEVICE_VIRTIO_BLK
-                || dev.device_id == pci::DEVICE_VIRTIO_BLK_M);
-        let is_ahci = dev.class == pci::CLASS_STORAGE && dev.subclass == pci::SUBCLASS_AHCI;
+            || dev.device_id == pci::DEVICE_VIRTIO_BLK_M);
 
-        if is_virtio {
-            debug("Found VirtIO block device!");
-
-            let mut blk = unsafe { VirtioDriver::init(&dev, phys_mem_offset, dma) }
-                .map_err(|e| format!("VirtIO init failed: {}", e))?;
-
-            debug("VirtIO initialized");
-
-            // Use GPT manager to find NTFS partition
-            let part_offset = match GptManager::find_ntfs_offset(&mut blk) {
-                Ok(offset) => {
-                    debug(&format!("GPT: Found NTFS partition at offset={:#x}", offset));
-                    offset
-                }
-                Err(e) => {
-                    debug(&format!("GPT: No NTFS partition found ({:?}), using raw offset", e));
-                    PARTITION_OFFSET
-                }
-            };
-
-            debug(&format!("VirtIO part_offset={:#x}", part_offset));
-
-            let mut boot = [0u8; 512];
-            blk.read_at(part_offset, &mut boot)
-                .map_err(|_| "VirtIO: failed to read boot sector")?;
-
-            let oem = &boot[3..11];
-            debug(&format!(
-                "VirtIO OEM: {:02x?} ({:?})",
-                oem,
-                core::str::from_utf8(oem).unwrap_or("???")
-            ));
-
-            if oem != b"NTFS    " {
-                debug("VirtIO: not NTFS → skipping");
-                continue;
-            }
-
-            debug("VirtIO: NTFS detected ✅ mounting...");
-
-            let size = blk.size();
-
-            return mount(BlockDeviceEnum::Virtio(Partition {
-                inner: blk,
-                start_offset: part_offset,
-                size: size.saturating_sub(part_offset),
-            }));
+        if !is_virtio {
+            continue;
         }
 
-        if is_ahci {
-            debug("Found AHCI device!");
+        debug("VirtIO disk found");
 
-            let bar_addr = dev.bar5_phys.ok_or_else(|| {
-                debug("AHCI: no BAR5, skipping");
-                "no BAR5"
-            })?;
+        let blk = unsafe { VirtioDriver::init(&dev, phys_mem_offset, dma)? };
+        let size = blk.size();
 
-            let virt = bar_addr + phys_mem_offset;
-            debug(&format!("AHCI at phys={:#x} virt={:#x}", bar_addr, virt));
+        let mut device = BlockDeviceEnum::Virtio(Partition {
+            inner: blk,
+            start_offset: 0,
+            size,
+        });
 
-            let mut blk = unsafe { AhciDriver::init(virt as usize, dma) }
-                .map_err(|e| format!("AHCI init failed: {:?}", e))?;
+        // IMPORTANT: create a temporary mutable borrow ONCE
+        let tmp = match &mut device {
+            BlockDeviceEnum::Virtio(p) => &mut p.inner,
+            _ => unreachable!(),
+        };
 
-            debug("AHCI initialized");
+        let gpt = GptManager::read_disk(&mut *tmp);
 
-            // Use GPT manager to find NTFS partition
-            let part_offset = match GptManager::find_ntfs_offset(&mut blk) {
-                Ok(offset) => {
-                    debug(&format!("GPT: Found NTFS partition at offset={:#x}", offset));
-                    offset
+        if let Ok(gpt) = gpt {
+            for part in gpt.partitions {
+                let offset = part.start_lba * gpt.sector_size as u64;
+
+                let mut buf = [0u8; 512];
+                let _ = device.read_at(offset, &mut buf);
+
+                if &buf[3..11] == b"NTFS    " {
+                    debug("NTFS found on VirtIO");
+                    return mount(device, phys_mem_offset);
                 }
-                Err(e) => {
-                    debug(&format!("GPT: No NTFS partition found ({:?}), using raw offset", e));
-                    PARTITION_OFFSET
-                }
-            };
-
-            debug(&format!("AHCI part_offset={:#x}", part_offset));
-
-            let mut boot = [0u8; 512];
-            blk.read_at(part_offset, &mut boot).map_err(|_| "AHCI: failed to read boot sector")?;
-
-            let oem = &boot[3..11];
-            debug(&format!(
-                "AHCI OEM: {:02x?} ({:?})",
-                oem,
-                core::str::from_utf8(oem).unwrap_or("???")
-            ));
-
-            debug(&format!("boot[0x1FE..0x200]={:02x?} (want 55 aa)", &boot[0x1FE..0x200]));
-
-            if oem != b"NTFS    " {
-                debug("AHCI: not NTFS → skipping (likely boot disk)");
-                continue;
             }
-
-            debug("AHCI: NTFS detected ✅ mounting...");
-
-            return mount(BlockDeviceEnum::Ahci(Partition {
-                inner: blk,
-                start_offset: part_offset,
-                size: PARTITION_SIZE,
-            }));
         }
     }
 
-    Err("no block device found".to_string())
+    Err("No VirtIO NTFS disk found".to_string())
 }
 
 pub fn detect_disks() -> Vec<DiskInfo> {
@@ -213,19 +152,13 @@ pub fn detect_disks() -> Vec<DiskInfo> {
     for dev in pci::scan() {
         let is_virtio = dev.vendor_id == pci::VENDOR_VIRTIO
             && (dev.device_id == pci::DEVICE_VIRTIO_BLK
-                || dev.device_id == pci::DEVICE_VIRTIO_BLK_M);
-
-        let is_ahci = dev.class == pci::CLASS_STORAGE && dev.subclass == pci::SUBCLASS_AHCI;
+            || dev.device_id == pci::DEVICE_VIRTIO_BLK_M);
 
         if is_virtio {
             disks.push(DiskInfo {
-                id: format!("{:02x}:{:02x}.{}", dev.bus, dev.device, dev.func),
+                id: dev.location(),
                 disk_type: DiskType::Virtio,
-            });
-        } else if is_ahci {
-            disks.push(DiskInfo {
-                id: format!("{:02x}:{:02x}.{}", dev.bus, dev.device, dev.func),
-                disk_type: DiskType::Ahci,
+                sector_count: 0,
             });
         }
     }
@@ -322,11 +255,15 @@ pub fn init_driver(
                 .find(|d| format!("{:02x}:{:02x}.{}", d.bus, d.device, d.func) == disk.id)
                 .ok_or("VirtIO device not found")?;
 
-            let blk = unsafe { VirtioDriver::init(&dev, phys_mem_offset, dma) }
+            let mut blk = unsafe { VirtioDriver::init(&dev, phys_mem_offset, dma) }
                 .map_err(|_| "VirtIO init failed")?;
             let size = blk.size();
-
-            mount(BlockDeviceEnum::Virtio(Partition { inner: blk, start_offset: 0, size }))
+            let part_offset =
+                GptManager::find_ntfs_offset(&mut blk).unwrap_or(GPT_FIRST_USABLE_LBA * 512);
+            mount(
+                BlockDeviceEnum::Virtio(Partition { inner: blk, start_offset: part_offset, size }),
+                phys_mem_offset,
+            )
         }
         DiskType::Ahci => {
             let dev = pci::scan()
@@ -337,16 +274,21 @@ pub fn init_driver(
             let bar_addr = dev.bar5_phys.ok_or("AHCI no BAR5")?;
             let virt = bar_addr + phys_mem_offset;
 
-            let blk =
+            let mut blk =
                 unsafe { AhciDriver::init(virt as usize, dma) }.map_err(|_| "AHCI init failed")?;
             let size = blk.size();
-            mount(BlockDeviceEnum::Ahci(Partition { inner: blk, start_offset: 0, size }))
+            let part_offset =
+                GptManager::find_ntfs_offset(&mut blk).unwrap_or(GPT_FIRST_USABLE_LBA * 512);
+            mount(
+                BlockDeviceEnum::Ahci(Partition { inner: blk, start_offset: part_offset, size }),
+                phys_mem_offset,
+            )
         }
     }
 }
 
-fn mount(device: BlockDeviceEnum) -> Result<(), String> {
-    let driver = NtfsDriver::mount(device, 0)
+fn mount(device: BlockDeviceEnum, offset: u64) -> Result<(), String> {
+    let driver = NtfsDriver::mount(device, offset)
         .map_err(|e| format!("NtfsFs::mount failed, [fs] mount error: {:?}", e));
     if driver.is_ok() {
         FS.call_once(|| Mutex::new(driver.unwrap()));
@@ -373,7 +315,8 @@ fn init_block_device(
             let driver = unsafe { VirtioDriver::init(&dev, phys_mem_offset, dma) }
                 .map_err(|e| format!("VirtIO init failed: {}", e))?;
 
-            Ok(BlockDeviceEnum::Virtio(Partition { inner: driver, start_offset: 0, size: 0 }))
+            let size = driver.size();
+            Ok(BlockDeviceEnum::Virtio(Partition { inner: driver, start_offset: 0, size }))
         }
         DiskType::Ahci => {
             let dev = pci::scan()
@@ -387,16 +330,9 @@ fn init_block_device(
             let driver = unsafe { AhciDriver::init(virt as usize, dma) }
                 .map_err(|e| format!("AHCI init failed: {:?}", e))?;
 
-            Ok(BlockDeviceEnum::Ahci(Partition { inner: driver, start_offset: 0, size: 0 }))
+            let size = driver.size();
+            Ok(BlockDeviceEnum::Ahci(Partition { inner: driver, start_offset: 0, size }))
         }
     }
 }
 
-fn detect_fs(oem: &[u8]) -> &'static str {
-    match oem {
-        b"NTFS    " => "NTFS",
-        b"MSDOS5.0" => "FAT12/16",
-        b"MSWIN4.1" => "FAT32",
-        _ => "UNKNOWN",
-    }
-}

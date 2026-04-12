@@ -1,7 +1,8 @@
 use core::fmt;
 
+use boot::FrameBufferInfo;
 use font8x8::UnicodeFonts;
-use boot::{FrameBufferInfo, PixelFormat};
+
 pub(crate) use crate::flags::SCREEN_WRITER;
 
 pub struct Writer {
@@ -44,7 +45,7 @@ impl Writer {
         let height = self.info.height;
         for y in 0..height {
             for x in 0..width {
-                self.write_pixel((x as usize), (y as usize  ), r, g, b);
+                self.write_pixel(x as usize, y as usize, r, g, b);
             }
         }
     }

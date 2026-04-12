@@ -3,20 +3,12 @@ pub mod bump;
 pub mod dma_alloc;
 pub mod types;
 
+use boot::{MemoryRegion, MemoryRegionKind};
 use x86_64::{
     PhysAddr,
     VirtAddr,
-    structures::paging::{
-        FrameAllocator,
-        Mapper,
-        OffsetPageTable,
-        Page,
-        PageTable,
-        PhysFrame,
-        Size4KiB,
-    },
+    structures::paging::{FrameAllocator, Mapper, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
 };
-use boot::{E820Entry, MemoryRegion, MemoryRegionKind};
 
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     unsafe {
@@ -34,20 +26,6 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
     unsafe { &mut *page_table_ptr }
-}
-
-pub fn create_example_mapping(
-    page: Page,
-    mapper: &mut OffsetPageTable,
-    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) {
-    use x86_64::structures::paging::PageTableFlags as Flags;
-
-    let frame = PhysFrame::containing_address(PhysAddr::new(0xB8000));
-    let flags = Flags::PRESENT | Flags::WRITABLE;
-
-    let map_to_result = unsafe { mapper.map_to(page, frame, flags, frame_allocator) };
-    map_to_result.expect("map_to failed").flush();
 }
 
 pub struct EmptyFrameAllocator;
@@ -89,33 +67,29 @@ pub struct BootInfoFrameAllocator {
 }
 
 impl BootInfoFrameAllocator {
-    /// # Safety
-    /// The caller must guarantee that the memory regions are valid and
-    /// complete, and that this is only called once.
     pub unsafe fn init(memory_map: &'static [MemoryRegion]) -> Self {
         BootInfoFrameAllocator { memory_map, next: 0 }
     }
 
-    /// # Safety
-    /// Same as init. Use when you have a raw pointer + length from
-    /// your stage2 BootInfo.
     pub unsafe fn init_from_raw(ptr: u64, len: u64) -> Self {
-        // Convert E820 entries to our MemoryRegion format
-        // Store converted regions somewhere static
-        static mut REGIONS: [MemoryRegion; 256] = [MemoryRegion {
-            start: 0,
-            end: 0,
-            kind: MemoryRegionKind::Unknown,
-        }; 256];
-
-        let entries = unsafe {
-            core::slice::from_raw_parts(ptr as *const E820Entry, len as usize)
-        };
+        static mut REGIONS: [MemoryRegion; 256] =
+            [MemoryRegion { start: 0, end: 0, kind: MemoryRegionKind::Unknown }; 256];
 
         let mut count = 0;
-        for entry in entries {
-            if count >= 256 { break; }
-            let kind = match entry.entry_type {
+        for i in 0..len {
+            let base = unsafe { core::ptr::read_unaligned((ptr + i * 24) as *const u64) };
+            let length = unsafe { core::ptr::read_unaligned((ptr + i * 24 + 8) as *const u64) };
+            let entry_type =
+                unsafe { core::ptr::read_unaligned((ptr + i * 24 + 16) as *const u32) };
+
+            if count >= 256 {
+                break;
+            }
+            if length == 0 {
+                continue;
+            }
+
+            let kind = match entry_type {
                 1 => MemoryRegionKind::Usable,
                 2 => MemoryRegionKind::Reserved,
                 3 => MemoryRegionKind::AcpiReclaimable,
@@ -123,30 +97,29 @@ impl BootInfoFrameAllocator {
                 5 => MemoryRegionKind::BadMemory,
                 _ => MemoryRegionKind::Unknown,
             };
+
             unsafe {
-                REGIONS[count] = MemoryRegion {
-                    start: entry.base,
-                    end: entry.base + entry.length,
-                    kind,
-                };
+                REGIONS[count] = MemoryRegion { start: base, end: base + length, kind };
             }
             count += 1;
         }
 
-        BootInfoFrameAllocator {
-            memory_map: unsafe { &REGIONS[..count] },
-            next: 0,
-        }
+        BootInfoFrameAllocator { memory_map: unsafe { &REGIONS[..count] }, next: 0 }
     }
+
     fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + '_ {
+        // Skip first 32MB — bootloader, page tables, ELF, scratch buffer
+        const ALLOC_START: u64 = 0x200_0000;
+
         self.memory_map
             .iter()
             .filter(|r| r.kind == MemoryRegionKind::Usable)
-            .flat_map(|r| {
-                (r.start..r.end).step_by(4096).map(|addr| {
-                    PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(addr))
-                })
+            .flat_map(move |r| {
+                let start = r.start.max(ALLOC_START);
+                let end = r.end;
+                if start >= end { (0u64..0u64).step_by(4096) } else { (start..end).step_by(4096) }
             })
+            .map(|addr| PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(addr)))
     }
 }
 
