@@ -375,10 +375,14 @@ name = "installer"
 version = "0.1.0"
 dependencies = [
  "boot",
+ "bus",
+ "device",
  "driver",
  "hal",
  "kernel",
  "macros",
+ "spin 0.10.0",
+ "vfs",
  "x86_64",
 ]
 

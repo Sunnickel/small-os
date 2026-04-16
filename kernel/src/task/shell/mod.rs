@@ -13,6 +13,7 @@ use futures_util::stream::StreamExt;
 use pc_keyboard::{DecodedKey, HandleControl, KeyCode, Keyboard, ScancodeSet1, layouts};
 use spin::{Mutex, Once};
 use vfs::fs::ntfs::NtfsFile;
+
 use crate::task::shell::{
     history::History,
     scancodes::ScancodeStream,
@@ -142,38 +143,41 @@ fn resolve_path(path: &str) -> String {
 
 /// Open current directory fresh from filesystem
 pub fn open_current_dir() -> Result<NtfsFile, &'static str> {
-    let mut fs = fs_mutex().lock();
-    let path = get_current_path();
-    fs.open(&path).map_err(|_| "failed to open current directory")
+    // let mut fs = fs_mutex().lock();
+    // let path = get_current_path();
+    // fs.open(&path).map_err(|_| "failed to open current directory")
+    Err("open_current_dir failed")
 }
 
 /// List current directory contents (fresh read)
 pub fn list_current_dir() -> Result<Vec<String>, &'static str> {
-    let mut fs = fs_mutex().lock();
-    let path = get_current_path();
-    let dir = fs.open(&path).map_err(|_| "failed to open current directory")?;
-    if !fs.is_directory(&dir).unwrap_or(false) {
-        return Err("not a directory");
-    }
-    fs.list_directory(&dir).map_err(|_| "failed to list directory")
+//     let mut fs = fs_mutex().lock();
+//     let path = get_current_path();
+//     let dir = fs.open(&path).map_err(|_| "failed to open current directory")?;
+//     if !fs.is_directory(&dir).unwrap_or(false) {
+//         return Err("not a directory");
+//     }
+//     fs.list_directory(&dir).map_err(|_| "failed to list directory")
+    Err("list_current_dir failed")
 }
 
 /// Change current directory
-pub fn change_dir(path: &str) -> Result<(), &'static str> {
-    let new_path = resolve_path(path);
-    let mut fs = fs_mutex().lock();
-    match fs.open(&new_path) {
-        Ok(dir) => {
-            if fs.is_directory(&dir).unwrap_or(false) {
-                drop(fs);
-                set_current_path(&new_path);
-                Ok(())
-            } else {
-                Err("not a directory")
-            }
-        }
-        Err(_) => Err("no such directory"),
-    }
+pub fn change_dir(_path: &str) -> Result<(), &'static str> {
+    // let new_path = resolve_path(path);
+    // let mut fs = fs_mutex().lock();
+    // match fs.open(&new_path) {
+    //     Ok(dir) => {
+    //         if fs.is_directory(&dir).unwrap_or(false) {
+    //             drop(fs);
+    //             set_current_path(&new_path);
+    //             Ok(())
+    //         } else {
+    //             Err("not a directory")
+    //         }
+    //     }
+    //     Err(_) => Err("no such directory"),
+    // }
+    Err("change_dir failed")
 }
 
 /// Get current path for commands

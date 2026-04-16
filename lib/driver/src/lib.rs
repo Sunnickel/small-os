@@ -6,17 +6,18 @@ pub mod binding;
 pub mod error;
 pub mod registry;
 
-pub mod r#match;
 pub mod block;
+pub mod r#match;
 
 use alloc::{boxed::Box, sync::Arc};
-use spin::{Once, Mutex};
+
 pub use binding::{Binding, DriverState};
 use device::{Device, DeviceId};
 pub use error::DriverError;
 use hal::dma::DmaAllocator;
 pub use r#match::MatchRule;
 pub use registry::DriverRegistry;
+use spin::{Mutex, Once};
 
 static PHYS_OFFSET: Once<u64> = Once::new();
 static DMA: Once<&'static Mutex<dyn DmaAllocator + Send + Sync>> = Once::new();
@@ -26,9 +27,7 @@ pub fn init(phys_offset: u64, dma: &'static Mutex<dyn DmaAllocator + Send + Sync
     DMA.call_once(|| dma);
 }
 
-pub(crate) fn phys_offset() -> u64 {
-    *PHYS_OFFSET.get().expect("driver::init() not called")
-}
+pub(crate) fn phys_offset() -> u64 { *PHYS_OFFSET.get().expect("driver::init() not called") }
 
 pub(crate) fn dma() -> &'static Mutex<dyn DmaAllocator + Send + Sync> {
     DMA.get().expect("driver::init() not called")

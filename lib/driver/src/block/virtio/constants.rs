@@ -42,4 +42,3 @@ pub(super) const VIRTQ_DESC_F_WRITE: u16 = 2;
 pub(super) const VIRTIO_BLK_T_IN: u32 = 0;
 pub(super) const VIRTIO_BLK_T_OUT: u32 = 1;
 pub(super) const VIRTIO_BLK_S_OK: u8 = 0;
-

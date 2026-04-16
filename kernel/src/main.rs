@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use core::panic;
+
 use boot::BootInfo;
 use kernel::{
     init,

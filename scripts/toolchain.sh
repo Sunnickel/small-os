@@ -4,13 +4,13 @@ set -e
 # =========================
 # CONFIG
 # =========================
+
 PREFIX="$HOME/opt/cross"
 TARGET=x86_64-elf
-JOBS=$(nproc --ignore=1)
 
-BINUTILS_VER=2.46.0
-GCC_VER=15.2.0
-GDB_VER=17.1
+BINUTILS_VER=2.44
+GCC_VER=15.1.0
+GDB_VER=16.3
 
 RUSTUP_URL="https://sh.rustup.rs"
 RUST_TARGET="x86_64-unknown-none"
@@ -19,47 +19,96 @@ BINUTILS_URL="https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILS_VER.tar.gz"
 GCC_URL="https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VER/gcc-$GCC_VER.tar.gz"
 GDB_URL="https://ftp.gnu.org/gnu/gdb/gdb-$GDB_VER.tar.gz"
 
+BUILD_DIR="$HOME/.cache/osdev-toolchain/$TARGET-$GCC_VER"
+
+# =========================
+# ENVIRONMENT DETECTION
+# =========================
+
+# Detect WSL (both WSL1 and WSL2)
+IS_WSL=0
+if grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null; then
+    IS_WSL=1
+    echo "==> Detected WSL environment"
+fi
+
+# On WSL, cap jobs to avoid OOM during heavy GCC optimization passes.
+# GCC's bootstrap-O3 can spike RAM per-job significantly.
+if [ "$IS_WSL" -eq 1 ]; then
+    # Use at most 75% of logical CPUs, minimum 1
+    JOBS=$(( ($(nproc) * 3 / 4 > 0) ? $(nproc) * 3 / 4 : 1 ))
+else
+    JOBS=$(nproc)
+fi
+
+# =========================
+# BUILD OPTIMIZATION FLAGS
+# =========================
+
+# These flags apply to the HOST build of the toolchain itself (not your OS).
+# -O2 -pipe: reasonable optimization, avoid slow temp files
+# -fomit-frame-pointer: squeeze a bit more out of the host build
+# -march=native: use every instruction your CPU supports for the host build
+HOST_CFLAGS="-O2 -pipe -march=native -fomit-frame-pointer"
+HOST_CXXFLAGS="$HOST_CFLAGS"
+
+export CFLAGS_FOR_BUILD="$HOST_CFLAGS"
+export CXXFLAGS_FOR_BUILD="$HOST_CXXFLAGS"
+
+# bootstrap-O3 runs heavier optimization passes that can OOM on WSL
+# (WSL memory is shared with Windows and often has no swap by default).
+# Fall back to the standard bootstrap-O2 there.
+if [ "$IS_WSL" -eq 1 ]; then
+    GCC_BUILD_CONFIG="bootstrap-O2"
+    echo "==> WSL detected: using bootstrap-O2 to avoid OOM (add swap or use native Linux for bootstrap-O3)"
+else
+    GCC_BUILD_CONFIG="bootstrap-O3"
+fi
+
 # =========================
 # ENV
 # =========================
+
 export PATH="$PREFIX/bin:$PATH"
 
 mkdir -p "$PREFIX"
-mkdir -p build
+mkdir -p "$BUILD_DIR"
 
 echo "==> Using PREFIX: $PREFIX"
+echo "==> Build dir: $BUILD_DIR"
 echo "==> Target: $TARGET"
 echo "==> Jobs: $JOBS"
+echo "==> GCC build config: $GCC_BUILD_CONFIG"
 
 # =========================
-# DEPENDENCIES Install
+# DEPENDENCIES
 # =========================
+
 echo "==> Checking dependencies..."
 
-REQUIRED=(wget tar make gcc g++ bison flex nasm mcopy mkfs.fat qemu-system-x86_64 parted)
+REQUIRED=(wget curl tar make gcc g++ bison flex nasm mcopy mkfs.fat qemu-system-x86_64 parted)
 
 for cmd in "${REQUIRED[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "Missing dependency: $cmd"
         echo ""
         echo "Install on Debian/Ubuntu:"
-        echo "sudo apt install -y build-essential bison flex texinfo \\"
-        echo "    libgmp3-dev libmpc3 libmpfr-dev libisl-dev nasm wget tar \\"
-        echo "    mtools dosfstools qemu-system-x86 parted"
+        echo "  sudo apt install -y build-essential bison flex texinfo \\"
+        echo "      libgmp3-dev libmpc-dev libmpfr-dev libisl-dev nasm wget curl tar \\"
+        echo "      mtools dosfstools qemu-system-x86 parted"
         exit 1
     fi
 done
 
 # =========================
-# Rust Install
+# RUST
 # =========================
+
 echo "==> Checking Rust..."
 
 if ! command -v cargo >/dev/null 2>&1; then
-    echo "==> Rust not found. Installing via rustup..."
-
+    echo "==> Rust not found. Installing..."
     curl --proto '=https' --tlsv1.2 -sSf "$RUSTUP_URL" | sh -s -- -y
-
     source "$HOME/.cargo/env"
 else
     echo "==> Rust already installed"
@@ -68,125 +117,183 @@ fi
 echo "==> Updating Rust..."
 rustup update
 
-echo "==> Installing toolchain components..."
-rustup component add rustfmt clippy rust-src llvm-tools-preview
+echo "==> Installing components..."
+rustup component add rustfmt clippy rust-src llvm-tools
 
 echo "==> Adding OS target..."
 rustup target add "$RUST_TARGET"
 
-echo "==> Rust version:"
-rustc --version
-cargo --version
+# =========================
+# PARALLEL DOWNLOAD HELPER
+# =========================
+
+# Kick off downloads in the background so they overlap with each other.
+# We only download what we don't already have.
+echo "==> Pre-fetching source tarballs in parallel..."
+cd "$BUILD_DIR"
+
+download_if_missing() {
+    local url="$1"
+    local file="$2"
+    if [ ! -f "$file" ]; then
+        echo "    Downloading $file..."
+        wget -q --compression=auto -O "$file" "$url" &
+    fi
+}
+
+download_if_missing "$BINUTILS_URL" "binutils-$BINUTILS_VER.tar.gz"
+download_if_missing "$GCC_URL"      "gcc-$GCC_VER.tar.gz"
+download_if_missing "$GDB_URL"      "gdb-$GDB_VER.tar.gz"
+
+# Wait for all background downloads to finish before proceeding
+wait
+echo "==> All tarballs ready."
 
 # =========================
 # BINUTILS
 # =========================
-echo "==> Building binutils $BINUTILS_VER..."
 
-cd build
-rm -rf binutils
-mkdir binutils
-cd binutils
+echo "==> Checking binutils..."
 
-wget -nc "$BINUTILS_URL"
-tar -xf "binutils-$BINUTILS_VER.tar.gz"
-cd "binutils-$BINUTILS_VER"
+if [ -f "$PREFIX/bin/$TARGET-as" ]; then
+    echo "==> Binutils already installed"
+else
+    echo "==> Building binutils..."
 
-mkdir build && cd build
+    cd "$BUILD_DIR"
+    [ -d "binutils-$BINUTILS_VER" ] || tar -xf "binutils-$BINUTILS_VER.tar.gz"
 
-../configure \
-    --target=$TARGET \
-    --prefix="$PREFIX" \
-    --with-sysroot \
-    --disable-nls \
-    --disable-werror
+    mkdir -p "binutils-$BINUTILS_VER/build"
+    cd "binutils-$BINUTILS_VER/build"
 
-make -j"$JOBS"
-make install
+    ../configure \
+        --target=$TARGET \
+        --prefix="$PREFIX" \
+        --with-sysroot \
+        --disable-nls \
+        --disable-werror \
+        --enable-lto \
+        --enable-plugins \
+        --enable-gold \
+        --disable-multilib
 
-ls -la
-
-cd ../../../..
+    make -j"$JOBS"
+    make -j"$JOBS" install
+fi
 
 # =========================
 # GCC
 # =========================
-echo "==> Building gcc $GCC_VER..."
 
-cd build
-rm -rf gcc
-mkdir gcc
-cd gcc
+echo "==> Checking GCC..."
 
-wget -nc "$GCC_URL"
-tar -xf "gcc-$GCC_VER.tar.gz"
-cd "gcc-$GCC_VER"
+if [ -f "$PREFIX/bin/$TARGET-gcc" ]; then
+    echo "==> GCC already installed"
+else
+    echo "==> Building GCC..."
 
-# GCC prerequisites
-./contrib/download_prerequisites
+    cd "$BUILD_DIR"
+    [ -d "gcc-$GCC_VER" ] || tar -xf "gcc-$GCC_VER.tar.gz"
 
-mkdir build && cd build
+    cd "gcc-$GCC_VER"
 
-../configure \
-    --target=$TARGET \
-    --prefix="$PREFIX" \
-    --disable-nls \
-    --enable-languages=c,c++ \
-    --without-headers \
-    --disable-shared \
-    --disable-threads \
-    --disable-multilib
+    if [ ! -d "gmp" ]; then
+        set +e
+        ./contrib/download_prerequisites > /dev/null
+        set -e
+    fi
 
-make all-gcc -j"$JOBS"
-make all-target-libgcc -j"$JOBS"
+    mkdir -p build
+    cd build
 
-make install-gcc
-make install-target-libgcc
+    ../configure \
+        --target=$TARGET \
+        --prefix="$PREFIX" \
+        --disable-nls \
+        --enable-languages=c \
+        --without-headers \
+        --disable-shared \
+        --disable-threads \
+        --disable-multilib \
+        --disable-bootstrap \
+        --enable-lto \
+        --enable-checking=release \
+        --with-tune=native \
+        --with-build-config=$GCC_BUILD_CONFIG
 
-cd ../../../..
+    make all-gcc -j"$JOBS"
+    make all-target-libgcc -j"$JOBS"
+    make install-gcc
+    make install-target-libgcc
+fi
 
 # =========================
 # GDB
 # =========================
-echo "==> Building gdb $GDB_VER..."
 
-cd build
-rm -rf gdb
-mkdir gdb
-cd gdb
+echo "==> Checking GDB..."
 
-wget -nc "$GDB_URL"
-tar -xf "gdb-$GDB_VER.tar.gz"
-cd "gdb-$GDB_VER"
+if [ -f "$PREFIX/bin/$TARGET-gdb" ]; then
+    echo "==> GDB already installed"
+else
+    echo "==> Building GDB..."
 
-mkdir build && cd build
+    cd "$BUILD_DIR"
+    [ -d "gdb-$GDB_VER" ] || tar -xf "gdb-$GDB_VER.tar.gz"
 
-../configure \
-    --target=$TARGET \
-    --prefix="$PREFIX" \
-    --disable-nls \
-    --disable-werror
+    mkdir -p "gdb-$GDB_VER/build"
+    cd "gdb-$GDB_VER/build"
 
-make -j"$JOBS"
-make install
+    ../configure \
+        --target=$TARGET \
+        --prefix="$PREFIX" \
+        --disable-nls \
+        --disable-werror
 
-cd ../../../..
+    make -j"$JOBS"
+    make -j"$JOBS" install
+fi
 
-echo "==> GDB installed"
+# =========================
+# CLEANUP
+# =========================
 
-rm -rf build
+echo "==> Cleaning build cache..."
+rm -rf "$BUILD_DIR"
+
+# =========================
+# PATH SETUP
+# =========================
+
+echo "==> Setting up PATH..."
+
+LINE='export PATH="$HOME/opt/cross/bin:$PATH"'
+
+add_to_file() {
+    local FILE="$1"
+    if [ -f "$FILE" ]; then
+        if ! grep -Fxq "$LINE" "$FILE"; then
+            echo "$LINE" >> "$FILE"
+            echo "Added to $FILE"
+        else
+            echo "Already in $FILE"
+        fi
+    fi
+}
+
+add_to_file "$HOME/.bashrc"
+add_to_file "$HOME/.zshrc"
+
+export PATH="$HOME/opt/cross/bin:$PATH"
 
 # =========================
 # DONE
 # =========================
+
 echo ""
 echo "=============================="
 echo " TOOLCHAIN READY"
 echo "=============================="
-echo "Add this to your shell:"
 echo ""
-echo "export PATH=\$HOME/opt/cross/bin:\$PATH"
-echo ""
-echo "Test:"
-echo "  x86_64-elf-gcc --version"
-echo ""
+echo "x86_64-elf-gcc is now available."
+echo "Restart your shell or run: source ~/.bashrc"

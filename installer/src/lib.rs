@@ -1,27 +1,22 @@
 #![no_std]
 #![no_main]
+use bus::Bus;
 extern crate alloc;
 
+use spin::Mutex;
+use alloc::boxed::Box;
 use core::fmt::Debug;
 
 use boot::BootInfo;
-use driver::{
-    fs::{
-        DiskInfo,
-        detect_disks,
-        format_disk,
-        get_disk_info,
-        is_initialized,
-    },
-    pci,
-};
 use kernel::{
     memory,
     memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
     serial_println,
 };
 use x86_64::VirtAddr;
-use driver::fs::init_auto;
+use device::DeviceType;
+use hal::dma::DmaAllocator;
+use kernel::device::registry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -31,148 +26,117 @@ pub enum QemuExitCode {
 }
 
 pub fn init(boot_info: &'static mut BootInfo) {
-    driver::util::set_debug_hook(|msg| serial_println!("{}", msg));
+    serial_println!("=== KERNEL INIT START ===");
+
+    // ─────────────────────────────────────────────
+    // MEMORY SETUP
+    // ─────────────────────────────────────────────
+    serial_println!("[mem] physical_memory_offset = 0x{:016x}", boot_info.physical_memory_offset);
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
-    serial_println!("Mapping memory...");
+    serial_println!("[mem] initializing mapper...");
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    serial_println!("[mem] mapper ready");
 
-    serial_println!("Frame allocator initializing...");
+    serial_println!(
+        "[mem] memory_map @ 0x{:016x}, entries = {}",
+        boot_info.memory_map,
+        boot_info.memory_map_len
+    );
+
     let mut frame_allocator = unsafe {
-        BootInfoFrameAllocator::init_from_raw(boot_info.memory_map, boot_info.memory_map_len)
+        BootInfoFrameAllocator::init_from_raw(
+            boot_info.memory_map,
+            boot_info.memory_map_len,
+        )
     };
 
-    serial_println!("mmap ptr={:#x} len={}", boot_info.memory_map, boot_info.memory_map_len);
-    for i in 0..boot_info.memory_map_len.min(16) {
-        let base =
-            unsafe { core::ptr::read_unaligned((boot_info.memory_map + i * 24) as *const u64) };
-        let len =
-            unsafe { core::ptr::read_unaligned((boot_info.memory_map + i * 24 + 8) as *const u64) };
-        let kind = unsafe {
-            core::ptr::read_unaligned((boot_info.memory_map + i * 24 + 16) as *const u32)
-        };
-        serial_println!("  [{:2}] base={:#018x} len={:#018x} type={}", i, base, len, kind);
-    }
+    serial_println!("[mem] frame allocator initialized");
 
-    serial_println!("Heap initializing...");
-    match memory::alloc::init_heap(&mut mapper, &mut frame_allocator) {
-        Err(e) => unsafe {
-            serial_println!("Heap couldn't be initialized! {:?}", e);
-        },
-        Ok(_) => {}
-    }
+    serial_println!("[mem] initializing heap...");
+    memory::alloc::init_heap(&mut mapper, &mut frame_allocator)
+        .expect("heap initialization failed");
+    serial_println!("[mem] heap ready");
 
-    serial_println!("DMA allocator initializing...");
-    let mut dma = KernelDmaAllocator::new(&mut frame_allocator, phys_mem_offset.as_u64());
+    // ─────────────────────────────────────────────
+    // DMA / DRIVER SETUP
+    // ─────────────────────────────────────────────
+    serial_println!("[dma] leaking frame allocator...");
+    let frame_alloc_static = Box::leak(Box::new(frame_allocator));
+    memory::dma_alloc::init_frame_allocator(frame_alloc_static);
+    serial_println!("[dma] frame allocator registered");
 
-    // ── Filesystem / disk init ──
-    serial_println!("Scanning PCI bus for build disk...");
+    serial_println!("[dma] creating DMA allocator...");
+    let dma_alloc =
+        Box::leak(Box::new(Mutex::new(KernelDmaAllocator::new(
+            phys_mem_offset.as_u64(),
+        )))) as &'static Mutex<dyn DmaAllocator + Send + Sync>;
 
-    pci::init_ecam(0xB0000000, phys_mem_offset.as_u64());
+    serial_println!("[driver] initializing driver subsystem...");
+    driver::init(phys_mem_offset.as_u64(), dma_alloc);
+    serial_println!("[driver] driver subsystem initialized");
 
-    // Step 1: Detect Disks
-    let disks = detect_disks();
-    if disks.is_empty() {
-        serial_println!("No disks detected!");
-        exit_qemu(QemuExitCode::Failed);
-    }
+    // ─────────────────────────────────────────────
+    // ACPI
+    // ─────────────────────────────────────────────
+    serial_println!("[acpi] rsdp = 0x{:016x}", boot_info.rsdp_addr);
 
-    serial_println!("Found {} disk(s)", disks.len());
-    for (i, disk) in disks.iter().enumerate() {
-        serial_println!("  {}: {} ({:?})", i, disk.id, disk.disk_type);
-    }
+    let acpi = hal::acpi::init_from_rsdp(
+        boot_info.rsdp_addr as usize,
+        phys_mem_offset.as_u64(),
+    )
+        .expect("ACPI init failed");
 
-    init_auto(phys_mem_offset.as_u64(), &mut dma).expect("No Devices");
+    serial_println!("[acpi] initialized");
+    serial_println!("[acpi] ecam_base = 0x{:016x}", acpi.ecam_base);
+    serial_println!("[acpi] phys_offset = 0x{:016x}", acpi.phys_offset);
 
-    let phys_offset = phys_mem_offset.as_u64();
+    // ─────────────────────────────────────────────
+    // PCI INIT
+    // ─────────────────────────────────────────────
+    serial_println!("[pci] initializing ECAM...");
+    hal::pci::init_ecam(acpi.ecam_base, acpi.phys_offset);
+    serial_println!("[pci] ECAM ready");
 
-    let target_disk =
-        disks.iter().find(|d| d.role == DiskRole::Data).expect("Unable to find a proper device");
+    // ─────────────────────────────────────────────
+    // PCI ENUMERATION (DETAILED)
+    // ─────────────────────────────────────────────
+    serial_println!("[pci] starting enumeration...");
 
-    // Step 2: Check if disk has GPT/NTFS already
-    match get_disk_info(target_disk, phys_offset, &mut dma) {
-        Ok(info) => {
-            serial_println!("Disk info:\n{}", info);
-            // Disk has GPT, try to mount existing NTFS
-            if !info.contains("NTFS") {
-                serial_println!("No NTFS partition found, need to format");
-                format_and_mount(target_disk, phys_offset, &mut dma);
-            } else {
-                serial_println!("NTFS found, mounting...");
-                mount_disk(target_disk, phys_offset, &mut dma);
-            }
-        }
-        Err(e) => {
-            serial_println!("No valid GPT ({}), formatting disk...", e);
-            format_and_mount(target_disk, phys_offset, &mut dma);
-        }
-    }
+    let pci_bus = bus::pci::PciBus;
 
-    if is_initialized() {
-        serial_println!("Filesystem mounted successfully!");
-        // Now you can use fs::fs_mutex().lock() to access files
-        test_filesystem();
-    } else {
-        serial_println!("Failed to mount filesystem!");
-        exit_qemu(QemuExitCode::Failed);
-    }
-
-    serial_println!("Installer ready!");
-}
-
-fn format_and_mount(disk: &DiskInfo, phys_offset: u64, dma: &mut impl driver::dma::DmaAllocator) {
-    serial_println!("Formatting disk with GPT + NTFS...");
-
-    match format_disk(disk, phys_offset, dma) {
-        Ok(part) => {
+    match pci_bus.enumerate(registry()) {
+        Ok(_) => {
             serial_println!(
-                "Created partition: LBA {}-{} ({} MB)",
-                part.start_lba,
-                part.end_lba,
-                part.size_bytes / 1024 / 1024
+                "[pci] enumeration complete: {} devices",
+                registry().len()
             );
-            // Now mount it
-            mount_disk(disk, phys_offset, dma);
         }
         Err(e) => {
-            serial_println!("Format failed: {}", e);
+            serial_println!("[pci] ENUMERATION FAILED");
+            serial_println!("[pci] error = {:?}", e);
+            panic!("PCI enumeration failed");
         }
     }
-}
 
-fn mount_disk(disk: &DiskInfo, phys_offset: u64, dma: &mut impl driver::dma::DmaAllocator) {
-    serial_println!("Mounting NTFS filesystem...");
+    let mut disks = 0;
 
-    if let Err(e) = driver::fs::init_driver(disk, phys_offset, dma) {
-        serial_println!("Mount failed: {}", e);
-    }
-}
+    for (_, dev) in registry().by_type(DeviceType::Block) {
+        if let Some(block) = dev.as_block() {
+            serial_println!("[disk] {}", dev.name());
 
-fn test_filesystem() {
-    use driver::fs::fs_mutex;
+            let mut buf = [0u8; 512];
+            block.read_blocks(0, &mut buf).unwrap();
 
-    let mut fs = fs_mutex().lock();
+            serial_println!("[disk] first bytes: {:02x} {:02x}", buf[0], buf[1]);
 
-    // Try to open root directory
-    match fs.root_directory() {
-        Ok(root) => {
-            serial_println!("Opened root directory (record {})", root.record_number());
-
-            // List directory contents
-            match fs.list_directory(&root) {
-                Ok(entries) => {
-                    serial_println!("Root directory entries: {:?}", entries);
-                }
-                Err(e) => {
-                    serial_println!("Failed to list directory: {:?}", e);
-                }
-            }
-        }
-        Err(e) => {
-            serial_println!("Failed to open root: {:?}", e);
+            disks += 1;
         }
     }
+
+    serial_println!("total disks: {}", disks);
+    serial_println!("=== KERNEL INIT DONE ===");
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) -> ! {

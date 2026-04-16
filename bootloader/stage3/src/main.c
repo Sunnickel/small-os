@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <stdbool.h>
+
 #include "boot_info.h"
 #include "fat32.h"
 #include "elf_loader.h"
@@ -7,31 +9,30 @@
 #include "virtio_blk.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS
+// BOOT INFO
 // ─────────────────────────────────────────────────────────────────────────────
 
-#define BOOT_INFO_ADDR  ((BootInfo *)0xFF00)
-
-// FAT32 partition LBA on boot.img (IDE primary, standard layout).
-#define FAT32_BOOT_LBA       2048ULL
-
-// FAT32 partition LBA on disk.img (first GPT partition, written by build).
-// Must match DISK_FAT32_START_LBA in the build.
-#define FAT32_DISK_LBA       2048ULL
-
-// 8.3 filenames on the FAT32 partition (uppercase, space-padded to 11 chars).
-#define KERNEL_NAME83        "KERNEL  ELF"   // KERNEL.ELF
-#define INSTALLER_NAME83     "INSTALL ELF"   // INSTALL.ELF
-#define STAGE1_NAME83        "STAGE1  BIN"   // STAGE1.BIN
-#define STAGE2_NAME83        "STAGE2  BIN"   // STAGE2.BIN
-#define STAGE3_NAME83        "STAGE3  BIN"   // STAGE3.BIN
-
-// Scratch buffer for ELF loading — large enough for kernel or build.
-#define ELF_SCRATCH_ADDR  ((void *)0x1000000)
-#define ELF_MAX_BYTES        (32ULL * 1024 * 1024)
+#define BOOT_INFO_ADDR ((BootInfo*)0xFF00)
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
+// DISK CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define FAT32_BOOT_LBA 2048ULL
+#define FAT32_DISK_LBA 2048ULL
+
+#define KERNEL_NAME83    "KERNEL  ELF"
+#define INSTALLER_NAME83 "INSTALL ELF"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEMORY
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define ELF_SCRATCH_ADDR ((void*)0x1000000)
+#define ELF_MAX_BYTES    (32ULL * 1024 * 1024)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGGING
 // ─────────────────────────────────────────────────────────────────────────────
 
 static void log(const char* msg)
@@ -43,145 +44,144 @@ static void log(const char* msg)
 
 static void panic(const char* msg)
 {
-    serial_puts(" - [PANIC] - ");
+    serial_puts("[PANIC] ");
     serial_puts(msg);
-    serial_puts(" - [PANIC] - \n");
+    serial_puts("\n");
     for (;;) __asm__ volatile("hlt");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ATA PIO — boot.img (IDE index 0)
+// ACPI (Stage3 responsibility)
 // ─────────────────────────────────────────────────────────────────────────────
 
-static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1"::"a"(v),"Nd"(p)); }
-static inline void outw(uint16_t p, uint16_t v) { __asm__ volatile("outw %0,%1"::"a"(v),"Nd"(p)); }
+typedef struct {
+    char signature[8];
+    uint8_t checksum;
+    char oem[6];
+    uint8_t revision;
+    uint32_t rsdt_addr;
+} __attribute__((packed)) RSDP;
 
-static inline uint8_t inb(uint16_t p)
+static void acpi_init(BootInfo* info)
 {
-    uint8_t r;
-    __asm__ volatile("inb %1,%0":"=a"(r):"Nd"(p));
-    return r;
+    if (!info->rsdp_addr)
+    {
+        log("ACPI: no RSDP provided");
+        return;
+    }
+
+    RSDP* rsdp = (RSDP*)(uintptr_t)info->rsdp_addr;
+
+    if (__builtin_memcmp(rsdp->signature, "RSD PTR ", 8) != 0)
+    {
+        panic("ACPI: invalid RSDP");
+    }
+
+    log("ACPI: RSDP detected");
+
+    // TODO:
+    // - parse XSDT
+    // - locate MADT (APIC)
+    // - initialize interrupts
 }
 
-static inline uint16_t inw(uint16_t p)
+// ─────────────────────────────────────────────────────────────────────────────
+// ELF LAUNCH
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void launch_elf(const char* name83,
+                       const char* label,
+                       BootInfo* info,
+                       uint64_t fat32_lba,
+                       uint64_t boot_disk,
+                       void (*read_sector)(uint64_t, void*))
 {
-    uint16_t r;
-    __asm__ volatile("inw %1,%0":"=a"(r):"Nd"(p));
-    return r;
-}
+    log("loading binary");
 
-#define ATA_DATA       0x1F0
-#define ATA_SECCOUNT   0x1F2
-#define ATA_LBA_LO     0x1F3
-#define ATA_LBA_MID    0x1F4
-#define ATA_LBA_HI     0x1F5
-#define ATA_DRIVE_HEAD 0x1F6
-#define ATA_CMD        0x1F7
-#define ATA_STATUS     0x1F7
-#define ATA_CMD_READ   0x20
-#define ATA_BSY        0x80
-#define ATA_DRQ        0x08
-
-
-static void ata_read_sector(uint64_t lba, void* buf)
-{
-    while (inb(ATA_STATUS) & ATA_BSY);
-    outb(ATA_DRIVE_HEAD, (uint8_t)(0xE0 | ((lba >> 24) & 0x0F)));
-
-    inb(0x3F6);
-    inb(0x3F6);
-    inb(0x3F6);
-    inb(0x3F6);
-
-    while (inb(ATA_STATUS) & ATA_BSY);
-    outb(0x1F1, 0x00);
-    outb(ATA_SECCOUNT, 1);
-    outb(ATA_LBA_LO, (uint8_t)(lba));
-    outb(ATA_LBA_MID, (uint8_t)(lba >> 8));
-    outb(ATA_LBA_HI, (uint8_t)(lba >> 16));
-    outb(ATA_CMD, ATA_CMD_READ);
-
-    inb(0x3F6);
-    inb(0x3F6);
-    inb(0x3F6);
-    inb(0x3F6);
-
-    while (inb(ATA_STATUS) & ATA_BSY);
-    uint8_t status = inb(ATA_STATUS);
-    if (status & 0x01) panic("ATA error after READ command");
-    while (!(inb(ATA_STATUS) & ATA_DRQ));
-    uint16_t* dst = (uint16_t*)buf;
-    for (int i = 0; i < 256; i++) dst[i] = inw(ATA_DATA);
-}
-
-static void launch_elf(const char* name83, const char* label,
-                       BootInfo* info, uint64_t fat32_lba, uint64_t boot_disk)
-{
-    serial_puts("[stage3] loading ");
-    serial_puts(label);
-    serial_puts("\n");
-
-    // Record which disk/partition we booted from so the target can use it
     info->fat32_partition_lba = fat32_lba;
     info->boot_disk = boot_disk;
 
     uint32_t cluster = fat32_find_root(name83);
     if (cluster < 2)
-    {
-        serial_puts("[stage3] not found: ");
-        serial_puts(name83);
-        serial_puts("\n");
-        panic("ELF not found on FAT32");
-    }
+        panic("file not found");
 
-    uint64_t bytes = fat32_read_file(cluster, ELF_SCRATCH_ADDR, ELF_MAX_BYTES);
-    if (bytes == 0) panic("fat32_read_file returned 0 bytes");
-
-    serial_puts("[stage3] ");
-    serial_puthex64(bytes);
-    serial_puts(" bytes read\n");
+    uint64_t size = fat32_read_file(cluster, ELF_SCRATCH_ADDR, ELF_MAX_BYTES);
+    if (!size)
+        panic("read failed");
 
     uint64_t entry = elf_load(ELF_SCRATCH_ADDR);
-    if (entry == 0) panic("ELF load failed");
+    if (!entry)
+        panic("invalid ELF");
 
-    serial_puts("[stage3] entry=");
-    serial_puthex64(entry);
-    serial_puts("\n");
+    log("jumping to kernel");
 
     KernelEntry fn = (KernelEntry)(uintptr_t)entry;
     fn(info);
-    panic("ELF returned");
+
+    panic("kernel returned");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ENTRY POINT
-// stage2: mov rdi, 0xFF00 ; jmp 0x200000
+// DISK SELECTION
 // ─────────────────────────────────────────────────────────────────────────────
+
+static void boot_from_disk(BootInfo* info)
+{
+    log("checking installed disk");
+
+    DiskProbe probe = disk_probe(virtio_blk_read_sector_1);
+
+    if (probe.result == PROBE_FOUND)
+    {
+        log("disk.img detected");
+
+        if (!fat32_init(FAT32_DISK_LBA, virtio_blk_read_sector_1))
+            panic("FAT32 disk init failed");
+
+        launch_elf(KERNEL_NAME83,
+                   "kernel",
+                   info,
+                   FAT32_DISK_LBA,
+                   BOOT_DISK_VIRTIO,
+                   virtio_blk_read_sector_1);
+    }
+}
+
+static void boot_from_usb(BootInfo* info)
+{
+    log("booting installer");
+
+    if (!fat32_init(FAT32_BOOT_LBA, virtio_blk_read_sector))
+        panic("FAT32 boot init failed");
+
+    launch_elf(INSTALLER_NAME83,
+               "installer",
+               info,
+               FAT32_BOOT_LBA,
+               BOOT_DISK_VIRTIO,
+               virtio_blk_read_sector);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY
+// ─────────────────────────────────────────────────────────────────────────────
+
 void stage3_main(BootInfo* boot_info)
 {
     serial_init();
-    log("stage3 starting");
 
+    log("stage3 start");
+
+    // 1. ACPI INIT (IMPORTANT)
+    acpi_init(boot_info);
+
+    // 2. STORAGE INIT
     if (!virtio_blk_init())
-        panic("no virtio-blk devices found");
+        panic("no virtio disk");
 
-    // Check disk.img (device 1) for installed kernel
-    DiskProbe probe = disk_probe(virtio_blk_read_sector_1);
-    if (probe.result == PROBE_FOUND)
-    {
-        log("installed system detected — booting kernel from disk.img");
-        if (!fat32_init(FAT32_DISK_LBA, virtio_blk_read_sector_1))
-            panic("FAT32 init failed on disk.img");
-        launch_elf(KERNEL_NAME83, "kernel", boot_info,
-                   FAT32_DISK_LBA, BOOT_DISK_VIRTIO);
-    }
+    // 3. BOOT LOGIC
+    boot_from_disk(boot_info);
+    boot_from_usb(boot_info);
 
-    // Fall through to boot.img (device 0) — run installer
-    log("disk.img not installed — running installer from boot.img");
-    if (!fat32_init(FAT32_BOOT_LBA, virtio_blk_read_sector))
-        panic("FAT32 init failed on boot.img");
-    launch_elf(INSTALLER_NAME83, "installer", boot_info,
-               FAT32_BOOT_LBA, BOOT_DISK_VIRTIO);
-
-    panic("unreachable");
+    panic("no boot path");
 }

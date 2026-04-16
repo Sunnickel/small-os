@@ -15,6 +15,7 @@ set(STAGE3_SOURCES
         src/debug.c
         src/disk_probe.c
         src/virtio_blk.c
+        src/libc.c
 )
 
 add_executable(stage3.elf ${STAGE3_SOURCES})

@@ -13,7 +13,5 @@ impl PhysAddr {
 
 impl Shr<i32> for PhysAddr {
     type Output = u32;
-    fn shr(self, rhs: i32) -> Self::Output {
-        (self.0 >> rhs) as u32
-    }
+    fn shr(self, rhs: i32) -> Self::Output { (self.0 >> rhs) as u32 }
 }

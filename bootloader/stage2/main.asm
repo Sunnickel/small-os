@@ -6,7 +6,7 @@
 ; ─────────────────────────────────────────────
 MMAP_BUFFER     equ 0xF000   ; E820 entries stored here (max ~21 entries before 0xFC00)
 BOOT_INFO_ADDR  equ 0xFF00   ; BootInfo struct passed to stage3
-STAGE3_ADDR     equ 0x600000 ; Above the heap hole (0x2000000-0x2FFFFFF)
+STAGE3_ADDR     equ 0x400000 ; Above the heap hole (0x2000000-0x2FFFFFF)
 VBE_INFO_ADDR   equ 0xFC00   ; VBE mode info block (moved up, away from E820 buffer)
 
 start:
@@ -25,6 +25,7 @@ start:
 
 	call detect_memory
 	call detect_framebuffer
+    call detect_rsdp
 
 ; ============================================================
 ; LOAD STAGE 3
@@ -119,6 +120,87 @@ detect_memory:
 	mov [mmap_count], bp
 	pop es
 	ret
+
+; ============================================================
+; ACPI RSDP SCAN (SAFE VERSION)
+; ============================================================
+detect_rsdp:
+    push es
+    push fs
+    push gs
+
+    xor ax, ax
+    mov es, ax
+
+    ; BIOS EBDA pointer (0x40E)
+    mov bx, [0x40E]
+    shl bx, 4
+    mov si, bx
+
+    ; search EBDA first (16KB)
+    mov ecx, 1024        ; 1024 * 16 bytes = 16KB
+    mov edi, esi
+
+.scan_ebda:
+    call check_rsdp
+    jc .found
+
+    add edi, 16
+    loop .scan_ebda
+
+    ; then scan BIOS area 0xE0000 - 0xFFFFF
+    mov edi, 0xE0000
+    mov ecx, 0x2000      ; 32KB / 16 bytes
+
+.scan_bios:
+    call check_rsdp
+    jc .found
+
+    add edi, 16
+    loop .scan_bios
+
+.not_found:
+    mov dword [rsdp_addr], 0
+    clc
+    jmp .done
+
+.found:
+    mov [rsdp_addr], edi
+
+.done:
+    pop gs
+    pop fs
+    pop es
+    ret
+
+
+; ============================================================
+; CHECK RSDP SIGNATURE
+; IN: EDI = address
+; OUT: CF = 1 if found
+; ============================================================
+check_rsdp:
+    push eax
+    push ebx
+
+    mov eax, [edi]
+    cmp eax, 0x20445352      ; "RSD "
+    jne .no
+
+    mov eax, [edi+4]
+    cmp eax, 0x20525450      ; " PTR"
+    jne .no
+
+    stc
+    pop ebx
+    pop eax
+    ret
+
+.no:
+    clc
+    pop ebx
+    pop eax
+    ret
 
 ; ============================================================
 ; REAL MODE: VBE FRAMEBUFFER
@@ -252,7 +334,7 @@ setup_paging:
 
     ; ── Heap hole PD[0][16..23] (existing) ──────────────────────────────
     mov ecx, 8
-    mov edi, 0x72000 + 16*8
+    mov edi, 0x72000 + (16*8)
     mov eax, 0x76003
 .heap_pts:
     mov  [edi], eax
@@ -390,7 +472,8 @@ lmode_entry:
 	mov qword [rdi + 72], 0
 
 	; +80 rsdp_addr = 0 (stage3 scans ACPI tables itself)
-	mov qword [rdi + 80], 0
+	mov eax, [rsdp_addr]
+    mov qword [rdi + 80], rax
 
 	; +88, +96  left zero — stage3 fills fat32_partition_lba / boot_disk
 
@@ -442,6 +525,7 @@ print:
 ; ============================================================
 boot_drive  db 0
 mmap_count  dw 0
+rsdp_addr   dd 0
 
 fb_addr     dd 0
 fb_width    dw 0

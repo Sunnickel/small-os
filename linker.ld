@@ -2,7 +2,7 @@ ENTRY(_start)
 OUTPUT_FORMAT(elf64-x86-64)
 
 SECTIONS {
-    . = 0x400000;
+    . = 0x600000;
     .text :
         {
             KEEP(*(.text.entry))

@@ -77,5 +77,4 @@ impl DeviceRegistry {
 
     /// Total number of registered devices.
     pub fn len(&self) -> usize { self.devices.read().len() }
-
 }

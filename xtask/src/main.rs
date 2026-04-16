@@ -1,5 +1,5 @@
 use std::{fs, process::Command};
-
+use std::process::Stdio;
 use clap::{Parser, Subcommand};
 
 use crate::{
@@ -33,9 +33,14 @@ enum Cmd {
 }
 
 pub fn run(cmd: &mut Command) {
-    let status = cmd.status().expect("failed");
-    if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+    let output = cmd
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()
+        .expect("failed to execute command");
+
+    if !output.status.success() {
+        panic!("command failed: {:?}", output.status);
     }
 }
 

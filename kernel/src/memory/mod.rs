@@ -7,7 +7,7 @@ use boot::{MemoryRegion, MemoryRegionKind};
 use x86_64::{
     PhysAddr,
     VirtAddr,
-    structures::paging::{FrameAllocator, Mapper, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
+    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
 };
 
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {

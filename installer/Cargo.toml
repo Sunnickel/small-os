@@ -17,9 +17,13 @@ workspace = true
 
 [dependencies]
 macros.workspace = true
-driver.workspace = true
 kernel.workspace = true
-hal.workspace = true
+driver.workspace = true
 boot.workspace = true
+device.workspace = true
+hal.workspace = true
+bus.workspace = true
+vfs.workspace = true
 
 x86_64.workspace = true
+spin.workspace = true

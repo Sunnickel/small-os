@@ -64,7 +64,7 @@ fn build_asm(cache: &mut BuildCache, files: &[&str]) {
 pub fn build_stage3() {
     let mut cache = BuildCache::load();
 
-    let c_files = ["main.c", "fat32.c", "elf_loader.c", "debug.c", "disk_probe.c", "virtio_blk.c"];
+    let c_files = ["main.c", "fat32.c", "elf_loader.c", "debug.c", "disk_probe.c", "virtio_blk.c", "libc.c"];
 
     let asm_files = ["entry.asm"];
 

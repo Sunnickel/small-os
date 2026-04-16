@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use core::panic;
+
 use boot::BootInfo;
 use installer::init;
 use kernel::serial_println;
@@ -10,9 +11,7 @@ use kernel::serial_println;
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.entry")]
 pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
-    // Print the raw pointer value before touching anything
     let ptr = boot_info as *mut BootInfo as u64;
-    // write ptr to serial directly via port I/O to avoid any allocator use
     unsafe {
         let mut port = x86_64::instructions::port::Port::<u8>::new(0x3F8);
         for byte in b"ptr=" {
@@ -25,7 +24,12 @@ pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
         port.write(b'\n');
     }
 
-    serial_println!("Starting up");
+    unsafe {
+        let mut port = x86_64::instructions::port::Port::<u8>::new(0x3F8);
+        for char in "[kernel] Starting up \n".chars() {
+            port.write(char as u8);
+        }
+    }
 
     unsafe extern "C" {
         static mut __bss_start: u8;
@@ -42,6 +46,9 @@ pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
             core::ptr::write_bytes(start, 0, len);
         }
     }
+
+
+
     init(boot_info);
 
     loop {

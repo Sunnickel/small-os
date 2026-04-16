@@ -1,20 +1,18 @@
 use alloc::{format, string::String, vec::Vec};
 
-use crate::{
-    fs::ntfs::{
-        boot::BootSector,
-        error::NtfsError,
-        runs::parse_data_runs,
-        types::{
-            AlternateDataStream,
-            AttributeType,
-            DataRun,
-            NtfsStat,
-            ObjectId,
-            ReparsePoint,
-            SecurityDescriptor,
-            StandardInformation,
-        },
+use crate::fs::ntfs::{
+    boot::BootSector,
+    error::NtfsError,
+    runs::parse_data_runs,
+    types::{
+        AlternateDataStream,
+        AttributeType,
+        DataRun,
+        NtfsStat,
+        ObjectId,
+        ReparsePoint,
+        SecurityDescriptor,
+        StandardInformation,
     },
 };
 pub(crate) fn parse_filename(attr_data: &[u8]) -> Option<(String, u64)> {

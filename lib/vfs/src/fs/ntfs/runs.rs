@@ -1,11 +1,8 @@
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use hal::block::{BlockDevice, BlockError};
 
-use crate::{
-    fs::ntfs::{boot::BootSector, error::NtfsError, types::DataRun},
-};
+use crate::fs::ntfs::{boot::BootSector, error::NtfsError, types::DataRun};
 
 /// Parse data runs from non-resident attribute header
 /// Returns vector of (start_cluster, length_in_clusters) pairs
@@ -120,7 +117,8 @@ pub(crate) fn read_data_runs<D: BlockDevice>(
                     let size = *length * bytes_per_cluster as u64;
                     let mut buffer = vec![0u8; size as usize];
 
-                    device.read_blocks(offset / 512, &mut buffer)
+                    device
+                        .read_blocks(offset / 512, &mut buffer)
                         .map_err(|_| NtfsError::IoError)?;
 
                     result.extend_from_slice(&buffer);

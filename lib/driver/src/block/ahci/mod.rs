@@ -29,7 +29,7 @@ impl Driver for AhciDriver {
 
     fn bind(
         &self,
-        device_id: DeviceId,
+        _device_id: DeviceId,
         device: Arc<dyn Device>,
     ) -> Result<Box<dyn DriverState>, DriverError> {
         let pci = device.as_any().downcast_ref::<PciBusDevice>().ok_or(DriverError::BindFailed)?;

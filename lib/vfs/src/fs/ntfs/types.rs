@@ -15,8 +15,7 @@ impl NtfsFile {
 }
 
 /// File statistics returned by stat operations
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct NtfsStat {
     pub is_directory: bool,
     pub size: u64,

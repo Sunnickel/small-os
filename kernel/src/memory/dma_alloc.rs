@@ -1,10 +1,12 @@
 // memory/dma_alloc.rs
-use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, vec::Vec};
+
+use hal::{
+    PhysAddr,
+    dma::{DmaAllocator, DmaBuffer},
+};
 use spin::Mutex;
 use x86_64::structures::paging::FrameAllocator;
-use hal::dma::{DmaAllocator, DmaBuffer};
-use hal::PhysAddr;
 
 // Global frame allocator storage
 static FRAME_ALLOC: Mutex<Option<&'static mut crate::memory::BootInfoFrameAllocator>> =
@@ -19,9 +21,7 @@ pub struct KernelDmaAllocator {
 }
 
 impl KernelDmaAllocator {
-    pub fn new(phys_mem_offset: u64) -> Self {
-        Self { phys_mem_offset }
-    }
+    pub fn new(phys_mem_offset: u64) -> Self { Self { phys_mem_offset } }
 }
 
 // Track allocations for deallocation
@@ -47,16 +47,11 @@ impl DmaAllocator for KernelDmaAllocator {
         // Store for free()
         ALLOC_TRACKER.lock().insert(base_phys, pages);
 
-        unsafe fn kernel_free(phys: PhysAddr, size: usize) {
+        unsafe fn kernel_free(_phys: PhysAddr, _size: usize) {
             // Implementation: lookup in ALLOC_TRACKER and deallocate frames
             // Requires access to FRAME_ALLOC
         }
 
-        Some(DmaBuffer {
-            phys,
-            virt,
-            size: pages * 4096,
-            free_fn: kernel_free,
-        })
+        Some(DmaBuffer { phys, virt, size: pages * 4096, free_fn: kernel_free })
     }
 }

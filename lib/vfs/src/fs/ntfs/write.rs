@@ -100,9 +100,7 @@ pub(crate) fn create_file<D: BlockDevice>(
 }
 
 /// Scan for free MFT record (simplified, does not check $MFT Bitmap)
-fn allocate_mft_record<D: BlockDevice>(
-    driver: &mut NtfsDriver<D>,
-) -> Result<u64, NtfsError> {
+fn allocate_mft_record<D: BlockDevice>(driver: &mut NtfsDriver<D>) -> Result<u64, NtfsError> {
     const START_SCAN: u64 = 16; // After system files
     const MAX_SCAN: u64 = 100000;
 

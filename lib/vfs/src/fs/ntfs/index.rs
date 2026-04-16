@@ -2,13 +2,16 @@ use alloc::{format, string::String, vec, vec::Vec};
 
 use hal::block::BlockDevice;
 
-use crate::{fs::ntfs::{
-    NtfsDriver,
-    attr::parse_filename_from_key,
-    error::NtfsError,
-    runs::parse_data_runs,
-    types::NtfsFile,
-}, Inode};
+use crate::{
+    Inode,
+    fs::ntfs::{
+        NtfsDriver,
+        attr::parse_filename_from_key,
+        error::NtfsError,
+        runs::parse_data_runs,
+        types::NtfsFile,
+    },
+};
 
 /// Add a directory entry to parent's index (resident or external)
 pub(crate) fn add_directory_entry<D: BlockDevice>(
@@ -16,7 +19,7 @@ pub(crate) fn add_directory_entry<D: BlockDevice>(
     parent: &NtfsFile,
     child_record: u64,
     child_name: &str,
-) -> Result<(), NtfsError>  {
+) -> Result<(), NtfsError> {
     let mut record = driver.read_mft_record(parent.record_number())?;
 
     // Check if has external index ($INDEX_ALLOCATION)
@@ -174,7 +177,6 @@ fn add_to_external_index<D: BlockDevice>(
     let idx_record_size =
         u32::from_le_bytes(parent_record[idx_root_val + 8..idx_root_val + 12].try_into().unwrap())
             as usize;
-
 
     // Find $INDEX_ALLOCATION
     let idx_alloc_offset = find_attribute_offset(parent_record, 0xA0)?;
