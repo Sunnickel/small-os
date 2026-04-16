@@ -7,7 +7,7 @@ use futures_util::task::AtomicWaker;
 use heapless::String;
 use spin::{Mutex, Once};
 use spinning_top::Spinlock;
-
+use driver::DriverRegistry;
 use crate::{
     memory::{alloc::Locked, types::fixed_size_block::FixedSizeBlockAllocator},
     screen::Writer,
@@ -65,3 +65,4 @@ pub static INTERRUPT_LOG_BUFFER: Mutex<String<1024>> = Mutex::new(String::new())
 // ==========================
 //
 pub static DEVICE_REGISTRY: Once<DeviceRegistry> = Once::new();
+pub static DRIVER_REGISTRY: Once<DriverRegistry> = Once::new();

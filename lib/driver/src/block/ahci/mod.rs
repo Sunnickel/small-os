@@ -17,8 +17,7 @@ pub(crate) mod port;
 use constants::*;
 use port::PortState;
 
-use crate::block::BlockDeviceEnum;
-// ── Driver entry point
+use crate::block::{AhciPortWrapper, BlockDeviceEnum};
 
 pub struct AhciDriver;
 
@@ -37,9 +36,7 @@ impl Driver for AhciDriver {
         pci.enable_dma();
         pci.enable_mmio();
 
-        // AHCI uses BAR5 (ABAR — AHCI Base Memory Register)
         let abar_phys = pci.info().bar_mmio(5).ok_or(DriverError::BindFailed)?;
-
         let phys_offset = crate::phys_offset();
         let mmio_base = (abar_phys.as_u64() + phys_offset) as usize;
 
@@ -56,14 +53,7 @@ impl Driver for AhciDriver {
 
 pub struct AhciState {
     mmio_base: usize,
-    ports: Vec<AhciPort>,
-}
-
-// Each discovered port is its own block device
-struct AhciPort {
-    port_idx: u8,
-    state: PortState,
-    sector_count: u64,
+    ports: Vec<AhciPortWrapper>,
 }
 
 impl AhciState {
@@ -103,7 +93,7 @@ impl AhciState {
                             identify_sector_count(&mut state).unwrap_or(131_071) // safe fallback
                         };
 
-                        ports.push(AhciPort { port_idx: i, state, sector_count });
+                        ports.push(AhciPortWrapper { port_idx: i as u8, state, sector_count });
                     }
                     Err(_) => continue, // port init failed, skip
                 }
@@ -128,44 +118,37 @@ impl AhciState {
 
 impl DriverState for AhciState {
     fn stop(&self) {
-        // Halt all ports cleanly
         for port in &self.ports {
             unsafe {
                 let port_base = self.mmio_base + 0x100 + (port.port_idx as usize) * 0x80;
                 let cmd = (port_base + PORT_CMD) as *mut u32;
-                // Clear ST (start) and FRE (FIS receive enable)
                 let val = ptr::read_volatile(cmd);
                 ptr::write_volatile(cmd, val & !((1 << 0) | (1 << 4)));
             }
         }
     }
 
-    fn as_block_device(mut self: Box<Self>) -> Option<BlockDeviceEnum> {
-        self.ports.pop().map(|port| {
-            BlockDeviceEnum::from_ahci_port(port.port_idx, port.state, port.sector_count)
-        })
+    fn as_block_device(self: Box<Self>) -> Option<BlockDeviceEnum> { None }
+
+    fn into_block_devices(self: Box<Self>) -> Vec<BlockDeviceEnum> {
+        let mut this = *self;
+        this.ports
+            .drain(..)
+            .map(|w| BlockDeviceEnum::Ahci(Box::new(w)))
+            .collect()
+    }
+
+    fn as_block_device_ref(&mut self) -> Option<&mut dyn BlockDevice> {
+        self.ports.first_mut().map(|w| w as &mut dyn BlockDevice)
     }
 }
 
 // ── Per-port BlockDevice wrapper
 
 pub struct AhciBlockDevice<'a> {
-    port: &'a mut AhciPort,
+    port: &'a mut AhciPortWrapper,
 }
 
-impl<'a> BlockDevice for AhciBlockDevice<'a> {
-    fn read_blocks(&mut self, lba: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        unsafe { self.port.state.read_sectors(lba, buf).map_err(|_| BlockError::ReadError) }
-    }
-
-    fn write_blocks(&mut self, lba: u64, buf: &[u8]) -> Result<(), BlockError> {
-        unsafe { self.port.state.write_sectors(lba, buf).map_err(|_| BlockError::WriteError) }
-    }
-
-    fn block_size(&self) -> usize { SECTOR_SIZE }
-
-    fn block_count(&self) -> u64 { self.port.sector_count }
-}
 
 // ── IDENTIFY DEVICE
 // ───────────────────────────────────────────────────────────

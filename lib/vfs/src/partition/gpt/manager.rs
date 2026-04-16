@@ -1,16 +1,11 @@
 use alloc::{format, string::String, vec, vec::Vec};
 
 use hal::block::BlockDevice;
-
-use crate::core::partition::gpt::{
-    GPT_FIRST_USABLE_LBA,
-    GPT_RESERVED_LBAS,
-    error::GptError,
-    generate_guid,
-    read::read_gpt,
-    structs::GptEntry,
-    write::write_gpt,
-};
+use crate::partition::gpt::error::GptError;
+use crate::partition::gpt::{generate_guid, GPT_FIRST_USABLE_LBA, GPT_RESERVED_LBAS};
+use crate::partition::gpt::read::read_gpt;
+use crate::partition::gpt::structs::GptEntry;
+use crate::partition::gpt::write::write_gpt;
 
 /// NTFS partition type GUID
 const NTFS_GUID: [u8; 16] = [

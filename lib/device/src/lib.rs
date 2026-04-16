@@ -39,10 +39,6 @@ pub trait Device: Send + Sync {
     fn remove(&self) {}
 
     fn as_any(&self) -> &dyn Any;
-
-    fn as_block(&self) -> Option<&mut dyn BlockDevice> {
-        None
-    }
 }
 
 // ── Typed handle returned to callers ─────────────────────────────────────────

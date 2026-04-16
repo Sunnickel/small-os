@@ -14,6 +14,8 @@ pub enum BlockError {
     UnsupportedSectorSize,
     Other,
     InvalidRequest,
+    DeviceBusy,
+    InvalidBuffer,
 }
 
 impl BlockError {
@@ -21,6 +23,7 @@ impl BlockError {
         match self {
             Self::DeviceNotReady => "device not ready",
             Self::DeviceError => "device error",
+            Self::DeviceBusy => "device busy",
             Self::Timeout => "timeout",
             Self::NoMemory => "no memory",
             Self::OutOfBounds => "out of bounds",
@@ -30,6 +33,7 @@ impl BlockError {
             Self::InvalidGeometry => "invalid geometry",
             Self::UnsupportedSectorSize => "unsupported sector size",
             Self::InvalidRequest => "invalid request",
+            Self::InvalidBuffer => "invalid buffer",
             Self::Other => "other",
         }
     }

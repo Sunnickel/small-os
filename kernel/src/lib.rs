@@ -14,6 +14,7 @@ pub mod interrupts;
 pub mod memory;
 pub mod screen;
 pub mod task;
+pub mod driver;
 
 use alloc::boxed::Box;
 
@@ -76,7 +77,7 @@ pub fn init(boot_info: &'static mut BootInfo) {
         Box::leak(Box::new(Mutex::new(KernelDmaAllocator::new(phys_mem_offset.as_u64()))))
             as &'static Mutex<dyn DmaAllocator + Send + Sync>;
 
-    driver::init(phys_mem_offset.as_u64(), dma_alloc);
+    ::driver::init(phys_mem_offset.as_u64(), dma_alloc);
     serial_println!("6. Driver subsystem initialized");
 
     // ── ACPI / PCI ──

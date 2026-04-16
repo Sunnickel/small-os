@@ -16,6 +16,7 @@ pub mod fs;
 pub mod inode;
 pub mod mount;
 pub mod path;
+pub mod partition;
 
 pub use file::{File, FileHandle};
 use hal::{fs::FileSystem, io::IoError};

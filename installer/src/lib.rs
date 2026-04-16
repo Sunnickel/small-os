@@ -5,6 +5,7 @@ extern crate alloc;
 
 use spin::Mutex;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use core::fmt::Debug;
 
 use boot::BootInfo;
@@ -14,9 +15,7 @@ use kernel::{
     serial_println,
 };
 use x86_64::VirtAddr;
-use device::DeviceType;
 use hal::dma::DmaAllocator;
-use kernel::device::registry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -64,6 +63,45 @@ pub fn init(boot_info: &'static mut BootInfo) {
     // ─────────────────────────────────────────────
     serial_println!("[dma] leaking frame allocator...");
     let frame_alloc_static = Box::leak(Box::new(frame_allocator));
+
+    // Map BAR5 here, before init_frame_allocator borrows frame_alloc_static
+    for (id, dev) in kernel::device::registry().by_type(device::DeviceType::Bus) {
+        if let Some(pci) = dev.as_any().downcast_ref::<bus::pci::PciBusDevice>() {
+            let (vendor, device) = pci.id_pair();
+
+            if vendor == 0x8086 && device == 0x2922 {
+                if let Some(bar5_phys) = pci.info().bar_mmio(5) {
+                    serial_println!("[ahci] mapping BAR5 at 0x{:08x}", bar5_phys.as_u64());
+
+                    use x86_64::{structures::paging::*, PhysAddr, VirtAddr};
+                    use x86_64::structures::paging::FrameAllocator;
+
+                    let flags = PageTableFlags::PRESENT
+                        | PageTableFlags::WRITABLE
+                        | PageTableFlags::NO_CACHE;
+
+                    let start_addr = VirtAddr::new(bar5_phys.as_u64());
+                    let end_addr = VirtAddr::new(bar5_phys.as_u64() + 0x4000);
+
+                    let start_page = Page::<Size4KiB>::containing_address(start_addr);
+                    let end_page = Page::<Size4KiB>::containing_address(end_addr);
+
+                    // Shadow variable to allow reborrowing
+                    let alloc: &mut _ = frame_alloc_static;
+                    for page in Page::range(start_page, end_page) {
+                        let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
+                        unsafe {
+                            mapper.map_to(page, frame, flags, alloc)
+                                .expect("AHCI BAR5 map failed")
+                                .flush();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // NOW init the frame allocator after we're done with it for BAR5 mapping
     memory::dma_alloc::init_frame_allocator(frame_alloc_static);
     serial_println!("[dma] frame allocator registered");
 
@@ -106,11 +144,11 @@ pub fn init(boot_info: &'static mut BootInfo) {
 
     let pci_bus = bus::pci::PciBus;
 
-    match pci_bus.enumerate(registry()) {
+    match pci_bus.enumerate(kernel::device::registry()) {
         Ok(_) => {
             serial_println!(
                 "[pci] enumeration complete: {} devices",
-                registry().len()
+                kernel::device::registry().len()
             );
         }
         Err(e) => {
@@ -120,22 +158,36 @@ pub fn init(boot_info: &'static mut BootInfo) {
         }
     }
 
-    let mut disks = 0;
+    serial_println!("[driver] registering drivers...");
+    let drv_registry = kernel::driver::registry();
+    drv_registry.register_driver(Arc::new(driver::block::virtio::VirtioBlkDriver));
+    drv_registry.register_driver(Arc::new(driver::block::ahci::AhciDriver));
+    serial_println!("[driver] drivers registered");
 
-    for (_, dev) in registry().by_type(DeviceType::Block) {
-        if let Some(block) = dev.as_block() {
-            serial_println!("[disk] {}", dev.name());
+    serial_println!("[driver] binding drivers to {} devices...", kernel::device::registry().len());
+    drv_registry.bind_all(kernel::device::registry());
+    serial_println!("[driver] bound {} drivers", drv_registry.bound_count());
 
-            let mut buf = [0u8; 512];
-            block.read_blocks(0, &mut buf).unwrap();
-
-            serial_println!("[disk] first bytes: {:02x} {:02x}", buf[0], buf[1]);
-
-            disks += 1;
-        }
+    // Log every PCI device and whether it matched
+    for (id, dev) in kernel::device::registry().by_type(device::DeviceType::Bus) {
+        let pci = match dev.as_any().downcast_ref::<bus::pci::PciBusDevice>() {
+            Some(p) => p,
+            None => {
+                serial_println!("[driver]   {:?} — not a PCI device", id);
+                continue;
+            }
+        };
+        let (vendor, device_id) = pci.id_pair();
+        let info = pci.info();
+        serial_println!(
+        "[driver]   {:02x}:{:02x}.{} vendor={:04x} device={:04x} class={:02x} sub={:02x} — {}",
+        info.address.bus, info.address.device, info.address.function,
+        vendor, device_id,
+        info.class, info.subclass,
+        if drv_registry.binding_for(id).is_some() { "BOUND" } else { "no driver" }
+    );
     }
 
-    serial_println!("total disks: {}", disks);
     serial_println!("=== KERNEL INIT DONE ===");
 }
 

@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, sync::Arc};
+use alloc::vec::Vec;
 use core::ptr;
 
 use bus::pci::PciBusDevice;
@@ -404,9 +405,27 @@ impl DriverState for VirtioBlkState {
         }
     }
 
-    fn as_block_device(self: Box<Self>) -> Option<BlockDeviceEnum> {
-        Some(BlockDeviceEnum::Virtio(self))
+    fn into_block_devices(self: Box<Self>) -> Vec<BlockDeviceEnum> {
+        self.as_block_device().into_iter().collect()
     }
+    fn as_block_device(self: Box<Self>) -> Option<BlockDeviceEnum> {
+        Some(BlockDeviceEnum::from_virtio(*self))
+    }
+
+    fn as_block_device_ref(&mut self) -> Option<&mut dyn hal::block::BlockDevice> {
+        Some(self)
+    }
+}
+
+impl hal::block::BlockDevice for VirtioBlkState {
+    fn read_blocks(&mut self, lba: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+        self.read_sectors(lba, buf)
+    }
+    fn write_blocks(&mut self, lba: u64, buf: &[u8]) -> Result<(), BlockError> {
+        self.write_sectors(lba, buf)
+    }
+    fn block_size(&self) -> usize { 512 }
+    fn block_count(&self) -> u64 { self.sector_count }
 }
 
 #[derive(Debug, Clone, Copy)]

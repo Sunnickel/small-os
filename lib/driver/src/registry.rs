@@ -1,10 +1,10 @@
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
-
 use bus::pci::PciBusDevice;
 use device::{DeviceId, DeviceRegistry};
 use spin::RwLock;
 
-use crate::{Binding, Driver, DriverError};
+use crate::{Binding, Driver, DriverError, DriverState};
+use crate::block::BlockDeviceEnum;
 
 pub struct DriverRegistry {
     drivers: RwLock<Vec<Arc<dyn Driver>>>,
@@ -26,7 +26,6 @@ impl DriverRegistry {
         device_id: DeviceId,
         device: Arc<dyn device::Device>,
     ) -> Result<(), DriverError> {
-        // Already bound — skip
         if self.bindings.read().contains_key(&device_id) {
             return Err(DriverError::AlreadyBound);
         }
@@ -35,7 +34,7 @@ impl DriverRegistry {
         let name = driver.name();
         let state = driver.bind(device_id, Arc::clone(&device))?;
 
-        self.bindings.write().insert(device_id, Binding::new(device_id, device, name, state));
+        let _ = self.bindings.write().insert(device_id, Binding::new(device_id, device, name, state));
 
         Ok(())
     }
@@ -88,19 +87,34 @@ impl DriverRegistry {
     }
 
     /// Alternative: Get all block devices (for multi-disk systems)
-    pub fn take_all_block_devices(&self) -> Vec<(DeviceId, crate::block::BlockDeviceEnum)> {
+    pub fn take_all_block_devices(&self) -> Vec<(DeviceId, BlockDeviceEnum)> {
         let mut bindings = self.bindings.write();
-        let device_ids: Vec<DeviceId> = bindings.keys().copied().collect();
+        let ids: Vec<DeviceId> = bindings.keys().copied().collect();
         let mut result = Vec::new();
 
-        for id in device_ids {
+        for id in ids {
             if let Some(binding) = bindings.remove(&id) {
-                if let Some(block_dev) = binding.into_block_device() {
-                    result.push((id, block_dev));
+                let devs = binding.into_block_devices();
+                for dev in devs {
+                    result.push((id, dev));
                 }
             }
         }
         result
+    }
+
+
+    pub fn for_each_block<F>(&self, mut f: F)
+    where
+        F: FnMut(DeviceId, &str, &mut dyn hal::block::BlockDevice),
+    {
+        for (id, binding) in self.bindings.write().iter_mut() {
+            if let Some(state) = binding.state.as_mut() {
+                if let Some(block) = state.as_block_device_ref() {
+                    f(*id, binding.driver_name, block);
+                }
+            }
+        }
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
