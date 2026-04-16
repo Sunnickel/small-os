@@ -123,3 +123,8 @@ pub trait TextDisplay: Display {
         }
     }
 }
+
+pub trait FramebufferDisplay: Display {
+    fn framebuffer(&mut self) -> &mut [u32];
+    fn stride(&self) -> usize;
+}

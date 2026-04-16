@@ -1,6 +1,5 @@
 use alloc::{format, string::String};
 
-use driver::fs::{fs_mutex, is_initialized};
 use macros::command;
 
 use crate::task::shell::{current_dir_path, resolve_path};

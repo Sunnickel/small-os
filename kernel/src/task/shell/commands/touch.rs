@@ -5,7 +5,7 @@ use alloc::{
 
 use driver::fs::{CreateOptions, fs_mutex, is_initialized};
 use macros::command;
-
+use vfs::fs::ntfs::CreateOptions;
 use crate::task::shell::{current_dir_path, resolve_path};
 
 #[command(

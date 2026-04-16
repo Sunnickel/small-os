@@ -3,12 +3,17 @@
 # ==============================================================================
 [workspace]
 resolver = "3"
-members = [
-    "installer",
+members = ["installer",
     "kernel",
     "lib/driver",
     "lib/macros",
-    "lib/hal", "lib/boot", "xtask",
+    "lib/hal",
+    "lib/boot",
+    "xtask",
+    "lib/device",
+    "lib/vfs",
+    "lib/sync",
+    "lib/bus",
 ]
 
 [workspace.package]
@@ -78,7 +83,11 @@ module_name_repetitions = "allow"
 macros = { path = "lib/macros" }
 driver = { path = "lib/driver" }
 hal = { path = "lib/hal" }
-boot = {path = "lib/boot"}
+vfs = { path = "lib/vfs" }
+sync = { path = "lib/sync" }
+bus = { path = "lib/bus" }
+device = { path = "lib/device" }
+boot = { path = "lib/boot" }
 kernel = { path = "kernel" }
 
 # Hardware / x86
@@ -115,7 +124,7 @@ anyhow = "1.0.102"
 
 # XTask tooling
 clap = { version = "4", features = ["derive"] }
-rayon = "1.10"
+rayon = "1.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"

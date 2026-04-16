@@ -2,6 +2,7 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
+use bus::Bus;
 extern crate alloc;
 
 #[macro_use]
@@ -12,12 +13,19 @@ pub mod interrupts;
 pub mod memory;
 pub mod screen;
 pub mod task;
+pub mod device;
 
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use spin::{Mutex, Once};
 use boot::BootInfo;
 use flags::*;
 pub use macros::{_print, _print_raw, _print_serial};
 use x86_64::VirtAddr;
-
+use hal::dma::DmaAllocator;
+use vfs::{OpenFlags, Path, Vfs};
+use vfs::fs::ntfs::NtfsDriver;
 use crate::{
     interrupts::{
         gdt,
@@ -25,10 +33,9 @@ use crate::{
     },
     memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
 };
+use crate::device::registry;
 
 pub fn init(boot_info: &'static mut BootInfo) {
-    driver::util::set_debug_hook(|msg| serial_println!("{}", msg));
-
     // ── Screen ──
     let fb_info = boot_info.framebuffer;
     let buffer =
@@ -57,15 +64,51 @@ pub fn init(boot_info: &'static mut BootInfo) {
     let mut frame_allocator = unsafe {
         BootInfoFrameAllocator::init_from_raw(boot_info.memory_map, boot_info.memory_map_len)
     };
-    serial_println!("6. Memory initialized");
 
     memory::alloc::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
-    serial_println!("7. Heap initialized");
 
-    // ── ACPI / FS ──
-    let mut dma = KernelDmaAllocator::new(&mut frame_allocator, phys_mem_offset.as_u64());
-    driver::acpi::init_from_rsdp(boot_info.rsdp_addr as usize, phys_mem_offset.as_u64());
-    driver::fs::init_auto(phys_mem_offset.as_u64(), &mut dma).expect("no block device found");
-    serial_println!("8. Filesystem initialized");
+    // ── DMA / Drivers ──
+    // Leak frame allocator to make it 'static
+    let frame_alloc_static = Box::leak(Box::new(frame_allocator));
+    memory::dma_alloc::init_frame_allocator(frame_alloc_static);
+
+    // Create and leak DMA allocator
+    let dma_alloc = Box::leak(Box::new(Mutex::new(KernelDmaAllocator::new(
+        phys_mem_offset.as_u64()
+    )))) as &'static Mutex<dyn DmaAllocator + Send + Sync>;
+
+    driver::init(phys_mem_offset.as_u64(), dma_alloc);
+    serial_println!("6. Driver subsystem initialized");
+
+    // ── ACPI / PCI ──
+    let acpi = hal::acpi::init_from_rsdp(boot_info.rsdp_addr as usize, phys_mem_offset.as_u64())
+        .expect("ACPI init failed");
+    hal::pci::init_ecam(acpi.ecam_base, acpi.phys_offset);
+    serial_println!("7. ACPI initialized");
+
+    // Enumerate PCI devices into device registry
+    let pci_bus = bus::pci::PciBus;
+    pci_bus.enumerate(registry()).expect("PCI enumeration failed");
+    serial_println!("8. PCI enumerated");
+
+    // Bind drivers to devices
+    registry().bind_all(registry());
+    serial_println!("9. Drivers bound: {} devices", registry().len());
+
+    // ── Filesystem ──
+    // Extract first block device for root filesystem
+    if let Some((device_id, block_dev)) = registry().take_block_device() {
+        serial_println!("10. Block device found: {:?}", device_id);
+
+        // Initialize NTFS filesystem
+        let vfs = Vfs::new();
+        let ntfs_fs = Box::new(NtfsDriver::<block_dev>);
+        vfs.mount(*ntfs_fs, Path::new("/").expect("couldnt create path")).expect("Failed to mount root filesystem");
+        serial_println!("11. Root filesystem mounted");
+
+
+    } else {
+        serial_println!("WARNING: No block device found for root filesystem");
+    }
 }

@@ -2,6 +2,7 @@
 #![no_main]
 extern crate alloc;
 
+use core::panic;
 use boot::BootInfo;
 use kernel::{
     init,
@@ -54,7 +55,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &panic::PanicInfo) -> ! {
     loop {
         x86_64::instructions::hlt();
     }

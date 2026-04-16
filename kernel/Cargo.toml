@@ -19,6 +19,10 @@ harness = false
 macros.workspace = true
 driver.workspace = true
 boot.workspace = true
+device.workspace = true
+hal.workspace = true
+bus.workspace = true
+vfs.workspace = true
 
 font8x8.workspace = true
 spinning_top.workspace = true

@@ -8,8 +8,6 @@ use boot::BootInfo;
 use driver::{
     fs::{
         DiskInfo,
-        DiskRole,
-        DiskRole::Data,
         detect_disks,
         format_disk,
         get_disk_info,

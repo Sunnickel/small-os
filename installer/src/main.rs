@@ -2,6 +2,7 @@
 #![no_main]
 extern crate alloc;
 
+use core::panic;
 use boot::BootInfo;
 use installer::init;
 use kernel::serial_println;
@@ -49,7 +50,7 @@ pub extern "C" fn _start(boot_info: &'static mut BootInfo) -> ! {
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &panic::PanicInfo) -> ! {
     serial_println!("panic! {}\n", _info);
     loop {
         x86_64::instructions::hlt();

@@ -4,9 +4,9 @@ use conquer_once::spin::OnceCell;
 use crossbeam_queue::ArrayQueue;
 use futures_util::task::AtomicWaker;
 use heapless::String;
-use spin::Mutex;
+use spin::{Mutex, Once};
 use spinning_top::Spinlock;
-
+use device::DeviceRegistry;
 use crate::{
     memory::{alloc::Locked, types::fixed_size_block::FixedSizeBlockAllocator},
     screen::Writer,
@@ -58,3 +58,10 @@ pub static SCREEN_WRITER: Spinlock<Option<Writer>> = Spinlock::new(None);
 
 /// Debug buffer for interrupt-safe logging
 pub static INTERRUPT_LOG_BUFFER: Mutex<String<1024>> = Mutex::new(String::new());
+
+
+// ==========================
+// Driver
+// ==========================
+//
+pub static DEVICE_REGISTRY: Once<DeviceRegistry> = Once::new();

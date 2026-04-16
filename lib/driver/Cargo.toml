@@ -15,7 +15,6 @@ harness = false
 
 [dependencies]
 hal.workspace = true
+device.workspace = true
+bus.workspace = true
 spin.workspace = true
-bitflags.workspace = true
-acpi.workspace = true
-x86_64.workspace = true
