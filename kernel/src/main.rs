@@ -57,7 +57,6 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
 
 #[panic_handler]
 fn panic(_info: &panic::PanicInfo) -> ! {
-    loop {
-        x86_64::instructions::hlt();
-    }
+    serial_println!("panic! {}\n", _info);
+    exit_qemu(QemuExitCode::Failed);
 }

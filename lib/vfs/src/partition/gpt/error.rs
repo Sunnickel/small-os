@@ -1,7 +1,8 @@
+use hal::block::BlockError;
 use hal::io::IoError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum GptError {
+pub enum GptError {
     InvalidSignature,
     InvalidHeaderCrc,
     InvalidEntriesCrc,
@@ -15,4 +16,8 @@ pub(crate) enum GptError {
 
 impl From<IoError> for GptError {
     fn from(_: IoError) -> Self { Self::IoError }
+}
+
+impl From<BlockError> for GptError {
+    fn from(_: BlockError) -> Self { Self::IoError }
 }

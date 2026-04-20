@@ -21,6 +21,10 @@ pub trait DriverState: Any + Send + Sync {
 
     /// Non-consuming ref for iteration without taking ownership
     fn as_block_device_ref(&mut self) -> Option<&mut dyn hal::block::BlockDevice> { None }
+
+    fn as_block_device_ptr(&mut self) -> Option<*mut dyn hal::block::BlockDevice> {
+        None
+    }
 }
 
 /// A live binding between a driver and a device.

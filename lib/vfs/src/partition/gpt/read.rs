@@ -2,7 +2,7 @@ use alloc::{vec, vec::Vec};
 
 use hal::block::BlockDevice;
 
-use crate::core::partition::gpt::{
+use crate::partition::gpt::{
     GPT_ENTRY_SIZE,
     GPT_HEADER_SIZE,
     GPT_MAX_ENTRIES,
@@ -16,7 +16,7 @@ use crate::core::partition::gpt::{
 
 /// Read and validate GPT from device (tries primary, then backup)
 pub(crate) fn read_gpt(dev: &mut (dyn BlockDevice)) -> Result<(GptHeader, Vec<GptEntry>), GptError> {
-    let sector = dev.sector_size() as u64;
+    let sector = dev.block_size() as u64;
 
     // Try primary header at LBA 1
     let result = read_header_raw(dev, 1, sector).and_then(|raw| parse_and_verify_header(&raw).ok());
@@ -85,7 +85,7 @@ fn read_header_raw(dev: &mut (dyn  BlockDevice), lba: u64, sector: u64) -> Optio
     }
 
     let mut buf = vec![0u8; sector as usize];
-    dev.read_at(lba.checked_mul(sector)?, &mut buf).ok()?;
+    dev.read_blocks(lba.checked_mul(sector)?, &mut buf).ok()?;
 
     if buf.get(0..8)? == GPT_SIGNATURE { Some(buf) } else { None }
 }
@@ -114,7 +114,7 @@ fn parse_header(raw: &[u8]) -> Result<GptHeader, GptError> {
 }
 
 fn read_entries(
-    dev: &mut (dyn  BlockDevice),
+    dev: &mut dyn  BlockDevice,
     sector: u64,
     h: &GptHeader,
 ) -> Result<Vec<GptEntry>, GptError> {
@@ -136,7 +136,7 @@ fn read_entries(
 
     let mut buf = vec![0u8; total_usize];
     let offset = h.partition_entry_lba.checked_mul(sector).ok_or(GptError::Overflow)?;
-    dev.read_at(offset, &mut buf)?;
+    dev.read_blocks(offset, &mut buf)?;
 
     let entries: Result<Vec<_>, _> =
         buf.chunks_exact(GPT_ENTRY_SIZE as usize).map(|e| parse_gpt_entry(e)).collect();

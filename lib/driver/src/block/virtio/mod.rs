@@ -387,6 +387,7 @@ impl VirtioBlkState {
         (*avail).idx = idx + 1;
     }}
 
+    #[allow(clippy::while_immutable_condition)]
     unsafe fn notify_and_wait(&self) { unsafe {
         // Write notify offset
         let notify_addr = self.notify_base as *mut u16;
@@ -394,7 +395,7 @@ impl VirtioBlkState {
 
         // Poll completion (simplified - should use interrupts)
         let used = self.used_buf.virt as *mut VirtqUsed;
-        while (*used).idx == 0 {} // Wait for device to update
+        while (*used).idx == 0 {}
     }}
 }
 
@@ -414,6 +415,10 @@ impl DriverState for VirtioBlkState {
 
     fn as_block_device_ref(&mut self) -> Option<&mut dyn hal::block::BlockDevice> {
         Some(self)
+    }
+
+    fn as_block_device_ptr(&mut self) -> Option<*mut dyn hal::block::BlockDevice> {
+        Some(self as *mut dyn hal::block::BlockDevice)
     }
 }
 

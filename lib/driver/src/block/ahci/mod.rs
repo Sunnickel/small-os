@@ -141,6 +141,10 @@ impl DriverState for AhciState {
     fn as_block_device_ref(&mut self) -> Option<&mut dyn BlockDevice> {
         self.ports.first_mut().map(|w| w as &mut dyn BlockDevice)
     }
+
+    fn as_block_device_ptr(&mut self) -> Option<*mut dyn BlockDevice> {
+        self.ports.first_mut().map(|w| w as *mut dyn BlockDevice)
+    }
 }
 
 // ── Per-port BlockDevice wrapper

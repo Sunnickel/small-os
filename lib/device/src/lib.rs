@@ -12,6 +12,7 @@ pub use device_id::DeviceId;
 pub use error::DeviceError;
 use hal::block::BlockDevice;
 pub use registry::DeviceRegistry;
+
 // ── Device type taxonomy ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,13 +33,17 @@ pub trait Device: Send + Sync {
     fn device_type(&self) -> DeviceType;
 
     /// Called once when the device is registered.
-    /// Perform any hardware init here (reset, enable interrupts, etc).
     fn probe(&self) -> Result<(), DeviceError> { Ok(()) }
 
     /// Called when the device is unregistered or the system shuts down.
     fn remove(&self) {}
 
     fn as_any(&self) -> &dyn Any;
+
+    /// If this device is a block device, returns a mutable reference to it.
+    /// Implementors backed by a Mutex/RefCell should lock inside here.
+    fn as_block_device(&self) -> Option<&dyn BlockDevice> { None }
+    fn as_block_device_mut(&self) -> Option<&mut dyn BlockDevice> { None }
 }
 
 // ── Typed handle returned to callers ─────────────────────────────────────────

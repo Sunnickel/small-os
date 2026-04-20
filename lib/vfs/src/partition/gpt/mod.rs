@@ -15,6 +15,8 @@ pub(crate) const GPT_MAX_ENTRIES: u32 = 128;
 pub(crate) const GPT_FIRST_USABLE_LBA: u64 = 34;
 pub(crate) const GPT_RESERVED_LBAS: u64 = 33;
 
+pub use crate::partition::gpt::manager::GptManager;
+
 static GUID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn generate_guid() -> [u8; 16] {
@@ -34,7 +36,7 @@ static CRC32C_TABLE: [u32; 256] = {
         let mut crc = i as u32;
         let mut j = 0;
         while j < 8 {
-            crc = if crc & 1 != 0 { (crc >> 1) ^ 0x82F63B78 } else { crc >> 1 };
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB88320 } else { crc >> 1 };
             j += 1;
         }
         table[i] = crc;

@@ -11,6 +11,7 @@ pub struct DriverRegistry {
     bindings: RwLock<BTreeMap<DeviceId, Binding>>,
 }
 
+
 impl DriverRegistry {
     pub const fn new() -> Self {
         Self { drivers: RwLock::new(Vec::new()), bindings: RwLock::new(BTreeMap::new()) }
@@ -68,7 +69,7 @@ impl DriverRegistry {
 
     /// Extract the first available block device from bound drivers.
     /// Returns (device_id, block_device) or None if no block devices found.
-    pub fn take_block_device(&self) -> Option<(DeviceId, crate::block::BlockDeviceEnum)> {
+    pub fn take_block_device(&self) -> Option<(DeviceId, BlockDeviceEnum)> {
         let mut bindings = self.bindings.write();
         let device_ids: Vec<DeviceId> = bindings.keys().copied().collect();
 
@@ -108,11 +109,40 @@ impl DriverRegistry {
     where
         F: FnMut(DeviceId, &str, &mut dyn hal::block::BlockDevice),
     {
-        for (id, binding) in self.bindings.write().iter_mut() {
-            if let Some(state) = binding.state.as_mut() {
-                if let Some(block) = state.as_block_device_ref() {
-                    f(*id, binding.driver_name, block);
+        // Collect raw pointers while lock is held
+        struct BlockEntry {
+            id: DeviceId,
+            ptr: *mut dyn hal::block::BlockDevice,
+            name: &'static str,
+        }
+        // SAFETY: BlockEntry holds no references to bindings, just raw pointers
+        // to the BlockDevice trait objects which are heap-allocated via Box in state
+        unsafe impl Send for BlockEntry {}
+
+        let entries: Vec<BlockEntry> = {
+            let mut bindings = self.bindings.write();
+            let mut vec = Vec::new();
+
+            for (id, binding) in bindings.iter_mut() {
+                if let Some(ptr) = binding
+                    .state
+                    .as_mut()
+                    .and_then(|s| s.as_block_device_ptr())
+                {
+                    vec.push(BlockEntry {
+                        id: *id,
+                        ptr,
+                        name: binding.driver_name,
+                    });
                 }
+            }
+            vec
+        }; // <-- lock dropped here
+
+        // Now safe to call f with lock released
+        for entry in entries {
+            unsafe {
+                f(entry.id, entry.name, &mut *entry.ptr);
             }
         }
     }

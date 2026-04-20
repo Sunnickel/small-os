@@ -1,21 +1,22 @@
 #![no_std]
 #![no_main]
-use bus::Bus;
 extern crate alloc;
+use bus::Bus;
 
-use spin::Mutex;
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc};
 use core::fmt::Debug;
 
 use boot::BootInfo;
+use device::Device;
+use hal::{block::BlockDevice, dma::DmaAllocator};
 use kernel::{
     memory,
-    memory::{BootInfoFrameAllocator, dma_alloc::KernelDmaAllocator},
+    memory::{dma_alloc::KernelDmaAllocator, BootInfoFrameAllocator},
     serial_println,
 };
+use spin::Mutex;
+use vfs::partition::gpt::GptManager;
 use x86_64::VirtAddr;
-use hal::dma::DmaAllocator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -45,10 +46,7 @@ pub fn init(boot_info: &'static mut BootInfo) {
     );
 
     let mut frame_allocator = unsafe {
-        BootInfoFrameAllocator::init_from_raw(
-            boot_info.memory_map,
-            boot_info.memory_map_len,
-        )
+        BootInfoFrameAllocator::init_from_raw(boot_info.memory_map, boot_info.memory_map_len)
     };
 
     serial_println!("[mem] frame allocator initialized");
@@ -73,8 +71,11 @@ pub fn init(boot_info: &'static mut BootInfo) {
                 if let Some(bar5_phys) = pci.info().bar_mmio(5) {
                     serial_println!("[ahci] mapping BAR5 at 0x{:08x}", bar5_phys.as_u64());
 
-                    use x86_64::{structures::paging::*, PhysAddr, VirtAddr};
-                    use x86_64::structures::paging::FrameAllocator;
+                    use x86_64::{
+                        structures::paging::*,
+                        PhysAddr,
+                        VirtAddr,
+                    };
 
                     let flags = PageTableFlags::PRESENT
                         | PageTableFlags::WRITABLE
@@ -89,9 +90,12 @@ pub fn init(boot_info: &'static mut BootInfo) {
                     // Shadow variable to allow reborrowing
                     let alloc: &mut _ = frame_alloc_static;
                     for page in Page::range(start_page, end_page) {
-                        let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
+                        let frame = PhysFrame::containing_address(PhysAddr::new(
+                            page.start_address().as_u64(),
+                        ));
                         unsafe {
-                            mapper.map_to(page, frame, flags, alloc)
+                            mapper
+                                .map_to(page, frame, flags, alloc)
                                 .expect("AHCI BAR5 map failed")
                                 .flush();
                         }
@@ -107,9 +111,8 @@ pub fn init(boot_info: &'static mut BootInfo) {
 
     serial_println!("[dma] creating DMA allocator...");
     let dma_alloc =
-        Box::leak(Box::new(Mutex::new(KernelDmaAllocator::new(
-            phys_mem_offset.as_u64(),
-        )))) as &'static Mutex<dyn DmaAllocator + Send + Sync>;
+        Box::leak(Box::new(Mutex::new(KernelDmaAllocator::new(phys_mem_offset.as_u64()))))
+            as &'static Mutex<dyn DmaAllocator + Send + Sync>;
 
     serial_println!("[driver] initializing driver subsystem...");
     driver::init(phys_mem_offset.as_u64(), dma_alloc);
@@ -120,10 +123,7 @@ pub fn init(boot_info: &'static mut BootInfo) {
     // ─────────────────────────────────────────────
     serial_println!("[acpi] rsdp = 0x{:016x}", boot_info.rsdp_addr);
 
-    let acpi = hal::acpi::init_from_rsdp(
-        boot_info.rsdp_addr as usize,
-        phys_mem_offset.as_u64(),
-    )
+    let acpi = hal::acpi::init_from_rsdp(boot_info.rsdp_addr as usize, phys_mem_offset.as_u64())
         .expect("ACPI init failed");
 
     serial_println!("[acpi] initialized");
@@ -168,27 +168,66 @@ pub fn init(boot_info: &'static mut BootInfo) {
     drv_registry.bind_all(kernel::device::registry());
     serial_println!("[driver] bound {} drivers", drv_registry.bound_count());
 
-    // Log every PCI device and whether it matched
-    for (id, dev) in kernel::device::registry().by_type(device::DeviceType::Bus) {
-        let pci = match dev.as_any().downcast_ref::<bus::pci::PciBusDevice>() {
-            Some(p) => p,
-            None => {
-                serial_println!("[driver]   {:?} — not a PCI device", id);
-                continue;
+    serial_println!("[disk] scanning block devices...");
+
+    drv_registry.for_each_block(|id, driver_name, dev| {
+        let sector_size = dev.block_size();
+        let mut buf = alloc::vec![0u8; sector_size];
+
+        if let Err(e) = dev.read_blocks(0, &mut buf) {
+            serial_println!("[disk] {:?} ({}) — read failed: {:?}", id, driver_name, e);
+            return;
+        }
+
+        // Skip boot device
+        if buf[510] == 0x55 && buf[511] == 0xAA {
+            serial_println!("[disk] {:?} ({}) — skipping (boot device, 55AA present)", id, driver_name);
+            return;
+        }
+
+        serial_println!("[disk] {:?} ({}) — no boot signature, checking GPT...", id, driver_name);
+
+        match GptManager::read_disk(dev) {
+            Ok(info) => {
+                serial_println!("[disk] {:?} — GPT found, {} partition(s)", id, info.partitions.len());
+                for part in &info.partitions {
+                    serial_println!(
+                    "[disk]   {:?} '{}' start={} end={} size={}MB",
+                    part.kind,
+                    part.name,
+                    part.start_lba,
+                    part.end_lba,
+                    part.size_bytes / 1024 / 1024,
+                );
+                }
             }
-        };
-        let (vendor, device_id) = pci.id_pair();
-        let info = pci.info();
-        serial_println!(
-        "[driver]   {:02x}:{:02x}.{} vendor={:04x} device={:04x} class={:02x} sub={:02x} — {}",
-        info.address.bus, info.address.device, info.address.function,
-        vendor, device_id,
-        info.class, info.subclass,
-        if drv_registry.binding_for(id).is_some() { "BOUND" } else { "no driver" }
-    );
-    }
+            Err(e) => {
+                serial_println!("[disk] {:?} — no GPT ({:?}), formatting...", id, e);
+
+                match GptManager::format_disk(dev, 0) {
+                    Ok((esp_start, esp_size, ntfs_start, ntfs_size)) => {
+                        let bs = dev.block_size() as u64;
+                        serial_println!("[disk] {:?} — formatted OK", id);
+                        serial_println!(
+                        "[disk]   ESP  start={} size={}MB",
+                        esp_start,
+                        esp_size * bs / 1024 / 1024,
+                    );
+                        serial_println!(
+                        "[disk]   NTFS start={} size={}MB",
+                        ntfs_start,
+                        ntfs_size * bs / 1024 / 1024,
+                    );
+                    }
+                    Err(e) => serial_println!("[disk] {:?} — format FAILED: {:?}", id, e),
+                }
+            }
+        }
+    });
 
     serial_println!("=== KERNEL INIT DONE ===");
+
+    exit_qemu(QemuExitCode::Success);
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
