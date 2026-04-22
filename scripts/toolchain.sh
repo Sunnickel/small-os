@@ -86,7 +86,7 @@ echo "==> GCC build config: $GCC_BUILD_CONFIG"
 
 echo "==> Checking dependencies..."
 
-REQUIRED=(wget curl tar make gcc g++ bison flex nasm mcopy mkfs.fat qemu-system-x86_64 parted)
+REQUIRED=(wget curl tar make gcc g++ bison flex nasm mcopy mkfs.fat qemu-system-x86_64 parted lsb_release gpg)
 
 for cmd in "${REQUIRED[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -95,10 +95,52 @@ for cmd in "${REQUIRED[@]}"; do
         echo "Install on Debian/Ubuntu:"
         echo "  sudo apt install -y build-essential bison flex texinfo \\"
         echo "      libgmp3-dev libmpc-dev libmpfr-dev libisl-dev nasm wget curl tar \\"
-        echo "      mtools dosfstools qemu-system-x86 parted"
+        echo "      mtools dosfstools qemu-system-x86 parted \\"
+        echo "      lsb-release gnupg apt-transport-https"
         exit 1
     fi
 done
+
+# =========================
+# CLANG-FORMAT
+# =========================
+
+LLVM_VER=20   # latest stable — bump this when LLVM releases a new version
+
+echo "==> Checking clang-format..."
+
+if command -v clang-format >/dev/null 2>&1; then
+    echo "==> clang-format already installed: $(clang-format --version)"
+elif ! command -v apt-get >/dev/null 2>&1; then
+    echo "    WARNING: apt-get not found. Install clang-format manually:"
+    echo "      https://apt.llvm.org  or  your distro's package manager"
+else
+    echo "==> Installing clang-format-$LLVM_VER via LLVM apt repository..."
+
+
+    # lsb_release and gpg guaranteed present by dep check above
+    CODENAME=$(lsb_release -cs)
+
+    # Add the LLVM apt signing key and repo (idempotent)
+    LLVM_KEY=/usr/share/keyrings/llvm-archive-keyring.gpg
+    if [ ! -f "$LLVM_KEY" ]; then
+        curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor -o "$LLVM_KEY"
+    fi
+
+    LLVM_LIST=/etc/apt/sources.list.d/llvm.list
+    if [ ! -f "$LLVM_LIST" ]; then
+        echo "deb [signed-by=$LLVM_KEY] https://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-$LLVM_VER main" \
+            | sudo tee "$LLVM_LIST" > /dev/null
+    fi
+
+    sudo apt-get update -qq
+    sudo apt-get install -y "clang-format-$LLVM_VER"
+
+    # Create an unversioned symlink so editors and CI find it as plain clang-format
+    sudo ln -sf "/usr/bin/clang-format-$LLVM_VER" /usr/local/bin/clang-format
+    echo "==> clang-format installed: $(clang-format --version)"
+fi
 
 # =========================
 # RUST
@@ -122,6 +164,10 @@ rustup component add rustfmt clippy rust-src llvm-tools
 
 echo "==> Adding OS target..."
 rustup target add "$RUST_TARGET"
+
+echo "==> Installing dev-deps..."
+cargo install tokei asmfmt
+
 
 # =========================
 # PARALLEL DOWNLOAD HELPER

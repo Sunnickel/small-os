@@ -3,17 +3,18 @@
 # ==============================================================================
 [workspace]
 resolver = "3"
-members = ["installer",
+members = [
+    "installer",
     "kernel",
     "lib/driver",
     "lib/macros",
     "lib/hal",
     "lib/boot",
-    "xtask",
     "lib/device",
     "lib/vfs",
     "lib/sync",
     "lib/bus",
+    "xtask",
 ]
 
 [workspace.package]

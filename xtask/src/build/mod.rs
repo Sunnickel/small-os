@@ -1,6 +1,18 @@
+mod stage1;
+mod stage2;
+mod stage3;
+
 use std::{fs, process::Command};
 
-use crate::run;
+use crate::{cache::BuildCache, run};
+
+pub fn build_bootloader() {
+    let mut cache = BuildCache::load();
+
+    stage1::build(&mut cache);
+    stage2::build(&mut cache);
+    stage3::build(&mut cache);
+}
 
 pub fn build_installer() {
     run(Command::new("cargo").args([

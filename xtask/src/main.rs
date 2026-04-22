@@ -1,21 +1,45 @@
-use std::{fs, process::Command};
-use std::process::Stdio;
+use std::{
+    fs,
+    process::{Command, Stdio},
+};
+
 use clap::{Parser, Subcommand};
 
 use crate::{
-    bootloader::build_bootloader,
-    build::{build_installer, build_kernel},
+    build::{build_bootloader, build_installer, build_kernel},
+    consts::BUILD_DIR,
     run::{debug, run_qemu},
     setup::{clean, image, toolchain},
 };
 
-mod bootloader;
 mod build;
-mod build_stage3;
 mod cache;
+mod discover;
+mod format;
 mod hash;
 mod run;
 mod setup;
+
+mod consts {
+    pub(crate) static BUILD_DIR: &str = ".build";
+
+    pub(crate) static STAGE1_SRC: &str = "bootloader/stage1";
+    pub(crate) static STAGE2_SRC: &str = "bootloader/stage2";
+    pub(crate) static STAGE3_SRC: &str = "bootloader/stage3/src";
+
+    pub const WORKSPACE_CRATES: &[&str] = &[
+        "installer",
+        "kernel",
+        "lib/driver",
+        "lib/macros",
+        "lib/hal",
+        "lib/boot",
+        "lib/device",
+        "lib/vfs",
+        "lib/sync",
+        "lib/bus",
+    ];
+}
 
 #[derive(Parser)]
 struct Cli {
@@ -30,6 +54,8 @@ enum Cmd {
     Run,
     Debug,
     Clean,
+    Fmt,
+    Check,
 }
 
 pub fn run(cmd: &mut Command) {
@@ -49,26 +75,38 @@ fn main() {
 
     match cli.cmd {
         Cmd::Toolchain => toolchain(),
+
+        Cmd::Fmt => fmt(),
+
         Cmd::Build => build(),
+
+        Cmd::Check => {
+            fmt();
+            build();
+        }
+
         Cmd::Run => {
             build();
-            run_qemu()
+            run_qemu();
         }
+
         Cmd::Debug => {
             build();
-            debug()
+            debug();
         }
+
         Cmd::Clean => clean(),
     }
 }
 
 fn build() {
-    if !fs::exists("./.build").unwrap() {
-        fs::create_dir("./.build").unwrap();
-    }
+    fs::create_dir_all(BUILD_DIR).unwrap();
 
     build_bootloader();
     build_kernel();
     build_installer();
+
     image();
 }
+
+fn fmt() { format::format_all(); }

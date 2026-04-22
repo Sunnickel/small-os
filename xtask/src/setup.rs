@@ -28,7 +28,20 @@ pub fn image() {
     let stage3_sectors = ((stage3_size + 511) / 512) as u16;
 
     // ─────────────────────────────────────────────
-    // 4. Write bootloader chain
+    // 4. PATCH stage3_sectors INTO stage1.bin (IMPORTANT: you MUST know offset in
+    //    binary)
+    // ─────────────────────────────────────────────
+    let mut stage1 = fs::read(".build/stage1.bin").unwrap();
+
+    let offset = 0x1A0;
+
+    stage1[offset] = (stage3_sectors & 0xFF) as u8;
+    stage1[offset + 1] = (stage3_sectors >> 8) as u8;
+
+    fs::write(".build/stage1.bin", &stage1).unwrap();
+
+    // ─────────────────────────────────────────────
+    // 5. Write bootloader chain
     // ─────────────────────────────────────────────
     run(Command::new("bash").args([
         "-c",
@@ -44,20 +57,6 @@ pub fn image() {
         "-c",
         "dd if=.build/stage3.bin of=.build/boot.img bs=512 seek=32 conv=notrunc status=none",
     ]));
-
-    // ─────────────────────────────────────────────
-    // 5. PATCH stage3_sectors INTO stage1.bin (IMPORTANT: you MUST know offset in
-    //    binary)
-    // ─────────────────────────────────────────────
-    let mut stage1 = fs::read(".build/stage1.bin").unwrap();
-
-    // Example: assume offset 0x1A0 inside stage1.bin
-    let offset = 0x1A0;
-
-    stage1[offset] = (stage3_sectors & 0xFF) as u8;
-    stage1[offset + 1] = (stage3_sectors >> 8) as u8;
-
-    fs::write(".build/stage1.bin", stage1).unwrap();
 
     // ─────────────────────────────────────────────
     // 6. Copy payloads into FAT32

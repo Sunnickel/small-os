@@ -1,75 +1,60 @@
 [BITS 16]
 [ORG 0x7C00]
 
-STAGE2_SEG     equ 0x0800
-STAGE2_SECTORS equ 10
-
+; ------------------------------------------------------------------
+; Entry point - CS:IP normalization first!
+; ------------------------------------------------------------------
 start:
+
+    jmp 0x0000:.flush_cs
+
+
+.flush_cs:
+
     cli
     xor ax, ax
     mov ds, ax
+    mov es, ax
     mov ss, ax
-    mov sp, 0x7A00
-    sti
-
+    mov sp, 0x7C00
     mov [boot_drive], dl
 
-    ; INT13 extensions check
-    mov ah, 0x41
-    mov bx, 0x55AA
-    mov dl, [boot_drive]
-    int 0x13
-    jc disk_error
-    cmp bx, 0xAA55
-    jne disk_error
+    sti
+    call init_serial
+    mov si, msg_start
+    call serial_print
 
-    ; load stage2
-    mov word [dap + 2], STAGE2_SECTORS
-    mov word [dap + 4], 0x0000
-    mov word [dap + 6], STAGE2_SEG
-    mov dword [dap + 8], 1
-    mov dword [dap + 12], 0
+    call check_lba_support
 
-    mov si, dap
-    mov ah, 0x42
-    mov dl, [boot_drive]
-    int 0x13
-    jc disk_error
+    call load_stage2
+    mov si, msg_load
+    call serial_print
 
-    mov si, stgld
-    call print
+    call print_crlf
 
-    jmp STAGE2_SEG:0x0000
 
-disk_error:
-    mov si, err_msg
-    call print
-.hang:
-    cli
-    hlt
-    jmp .hang
+    jmp STAGE2_SEG:STAGE2_OFF
 
-print:
-    lodsb
-    or al, al
-    jz .done
-    mov ah, 0x0E
-    int 0x10
-    jmp print
-.done:
-    ret
+; ------------------------------------------------------------------
+; DATA
+; ------------------------------------------------------------------
+boot_drive:  db 0
 
-boot_drive db 0
-err_msg db "Stage1 disk error!",0
-stgld db "Stage2 loaded",0
+msg_start: db "[stage1] starting...", 13, 10, 0
 
-dap:
-    db 0x10
-    db 0
-    dw 0
-    dw 0
-    dw 0
-    dq 0
 
+
+msg_load: db "[stage1] loading next stage", 13, 10, 0
+
+; ------------------------------------------------------------------
+; Modules (all code/data that must fit in 512 bytes)
+; ------------------------------------------------------------------
+%include "bootloader/stage1/macros.asm"
+%include "bootloader/stage1/disk.asm"
+%include "bootloader/stage1/serial.asm"
+
+; ------------------------------------------------------------------
+; BOOT SIGNATURE - MUST BE LAST 2 BYTES OF 512-BYTE SECTOR
+; ------------------------------------------------------------------
 times 510-($-$$) db 0
 dw 0xAA55
